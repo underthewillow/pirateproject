@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useRoller } from '../../context/RollContext'
 import { parseExpr, rollD20, fmt } from '../../lib/dice'
+import { fetchDdbSheet } from '../../lib/ddb'
 
 const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 
@@ -8,17 +10,35 @@ const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 // Reads the imported `sheet_data`; every roll respects the Adv/Dis toggle.
 export default function StatBlock({ member }) {
   const { patchItem, canEdit } = useData()
+  const roller = useRoller()
   const s = member.sheet_data
   const [mode, setMode] = useState('normal')
   const [expr, setExpr] = useState('')
   const [log, setLog] = useState([])
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
   const counter = useRef(0)
   if (!s) return null
 
-  const push = (e) => setLog((l) => [{ id: ++counter.current, ...e }, ...l].slice(0, 14))
-  const d20 = (label, m) => { const r = rollD20(m, mode); push({ label, detail: r.detail, total: r.total, crit: r.crit, fumble: r.fumble }) }
+  const push = (e) => { setLog((l) => [{ id: ++counter.current, ...e }, ...l].slice(0, 14)); roller?.show(e) }
+  const d20 = (label, m) => { const r = rollD20(m, mode); push({ label, detail: r.detail, total: r.total, crit: r.crit, fumble: r.fumble, face: r.base }) }
   const dmg = (label, e) => { const r = parseExpr(e); if (r) push({ label: `${label} damage`, detail: r.detail, total: r.total }) }
   const custom = () => { const r = parseExpr(expr); if (r) push({ label: expr.trim(), detail: r.detail, total: r.total }) }
+
+  const ddbId = String(member.sheet_url || '').match(/\d{6,}/)?.[0]
+  const sync = async () => {
+    setSyncing(true); setSyncMsg('')
+    try {
+      const sheet = await fetchDdbSheet(member.sheet_url)
+      await patchItem('crew', member.id, { sheet_data: sheet })
+      setSyncMsg('Synced from D&D Beyond ✓')
+    } catch (err) {
+      setSyncMsg(err.message || 'Sync failed')
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(''), 5000)
+    }
+  }
 
   const setSheet = (patch) => patchItem('crew', member.id, { sheet_data: { ...s, ...patch } })
   const cur = s.hpCurrent ?? s.maxHp
@@ -29,7 +49,15 @@ export default function StatBlock({ member }) {
 
   return (
     <div className="statblock">
-      <div className="sb-classline">{s.classLine} · {s.race}{s.alignment ? ` · ${s.alignment}` : ''}</div>
+      <div className="sb-topline">
+        <div className="sb-classline">{s.classLine} · {s.race}{s.alignment ? ` · ${s.alignment}` : ''}</div>
+        {ddbId && canEdit && (
+          <button className="btn small sb-sync-btn" disabled={syncing} onClick={sync}>
+            {syncing ? 'Syncing…' : '⟳ Sync D&D Beyond'}
+          </button>
+        )}
+      </div>
+      {syncMsg && <div className="sb-sync-msg muted">{syncMsg}</div>}
 
       <div className="sb-rollbar">
         <div className="toolbar" style={{ gap: 6 }}>

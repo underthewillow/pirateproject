@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { rollDie, parseExpr, fmt, abilityMod } from '../../lib/dice'
+import { useRoller } from '../../context/RollContext'
 
 export { abilityMod }
 
@@ -34,9 +35,12 @@ export default function DiceRoller({ member }) {
   const counter = useRef(0)
 
   const abilities = readAbilities(member?.stats)
+  const roller = useRoller()
 
-  const push = (entry) =>
+  const push = (entry) => {
     setLog((l) => [{ id: ++counter.current, ...entry }, ...l].slice(0, 12))
+    roller?.show(entry)
+  }
 
   const rollQuick = (sides) => {
     let base, note = ''
@@ -50,6 +54,7 @@ export default function DiceRoller({ member }) {
       label: `d${sides}${mv ? ' ' + fmt(mv) : ''}`,
       detail: `[${base}]${note}${mv ? ' ' + fmt(mv) : ''}`,
       total: base + mv,
+      face: base,
       crit: sides === 20 && base === 20,
       fumble: sides === 20 && base === 1,
     })
@@ -66,6 +71,7 @@ export default function DiceRoller({ member }) {
       label: `${a.abbr} check ${fmt(a.mod)}`,
       detail: `d20[${base}]${note} ${fmt(a.mod)}`,
       total: base + a.mod,
+      face: base,
       crit: base === 20,
       fumble: base === 1,
     })

@@ -633,6 +633,53 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
 
 .sb-spell { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); }
 
+.sb-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.sb-sync-btn { white-space: nowrap; }
+.sb-sync-msg { font-size: 13px; margin-top: 2px; }
+
+/* ---------- roll overlay (global) ---------- */
+.roll-overlay {
+  position: fixed; top: 72px; left: 0; right: 0;
+  display: flex; justify-content: center;
+  z-index: 200; pointer-events: none; padding: 0 12px;
+}
+.roll-card {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(160deg, var(--leather-light), var(--leather-dark));
+  border: 1px solid var(--leather-darker); border-radius: 12px;
+  padding: 12px 22px 12px 14px; min-width: 220px; max-width: 92vw;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,220,170,0.15);
+  color: var(--parchment-light);
+  animation: rollIn 0.34s cubic-bezier(.2,1.3,.4,1);
+  cursor: pointer;
+}
+@keyframes rollIn { from { opacity: 0; transform: translateY(-18px) scale(.9); } to { opacity: 1; transform: none; } }
+.roll-die { position: relative; width: 54px; height: 54px; color: var(--brass-light); flex: 0 0 auto; }
+.d20-svg { width: 100%; height: 100%; animation: dieTumble 0.6s ease-out; }
+@keyframes dieTumble { 0% { transform: rotate(-200deg) scale(.35); opacity: .2; } 70% { transform: rotate(18deg) scale(1.12); } 100% { transform: none; opacity: 1; } }
+.roll-face { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 21px; color: var(--parchment-light); animation: faceIn 0.25s 0.34s both; }
+@keyframes faceIn { from { opacity: 0; } to { opacity: 1; } }
+.roll-info { display: flex; flex-direction: column; }
+.roll-total { font-family: var(--font-display); font-size: 38px; line-height: 1; animation: pop 0.42s 0.18s both; }
+@keyframes pop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
+.roll-label { font-family: var(--font-ui); font-weight: 600; font-size: 15px; color: var(--brass-light); }
+.roll-detail { font-size: 12px; color: rgba(240,220,190,0.7); }
+.roll-card.crit { box-shadow: 0 0 0 2px #2e7a3a, 0 14px 34px rgba(0,0,0,0.62); }
+.roll-card.crit .roll-total { color: #8fe0a0; }
+.roll-card.fumble { box-shadow: 0 0 0 2px var(--wax-red), 0 14px 34px rgba(0,0,0,0.62); }
+.roll-card.fumble .roll-total { color: #e58a86; }
+.roll-mute {
+  pointer-events: auto; position: fixed; top: 78px; right: 14px;
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  background: rgba(20,12,5,0.82); border: 1px solid var(--leather-dark); color: var(--parchment-light);
+}
+
+/* Keep grid boxes vertically centred so rows line up even when one cell
+   (e.g. Hit Points with its buttons) is taller than its neighbours. */
+.sb-stat, .sb-abil, .ability { display: flex; flex-direction: column; justify-content: center; align-items: stretch; }
+.sb-stat > *, .sb-abil > *, .ability > * { width: 100%; }
+
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--leather-dark); }
 ::-webkit-scrollbar-thumb {
@@ -688,6 +735,12 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   .sb-stat-num { font-size: 20px; }
   .sb-abil-mod { font-size: 22px; }
   .quest { transform: none !important; }
+  .roll-overlay { top: 8px; }
+  .roll-mute { top: 12px; }
+  .roll-total { font-size: 32px; }
+  .roll-die { width: 46px; height: 46px; }
+  .sb-topline { gap: 6px; }
+  .modal p { margin: 6px 0; }
 }
 @media (max-width: 380px) {
   .sb-combat, .sb-abilities { grid-template-columns: repeat(2, 1fr); }
