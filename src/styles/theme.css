@@ -526,6 +526,63 @@ body {
 .journal-body { white-space: pre-wrap; line-height: 1.65; }
 .journal-preview { white-space: normal; font-size: 15px; font-style: italic; }
 
+/* ---------- character portrait ---------- */
+.pc-star { color: var(--gold); margin-right: 4px; font-size: 13px; }
+.portrait-frame {
+  display: block; position: relative; margin-top: 14px;
+  border: 1px solid var(--leather-darker); border-radius: var(--radius);
+  background: linear-gradient(160deg, #1b1109, #0d0703);
+  overflow: hidden; box-shadow: inset 0 0 24px rgba(0,0,0,0.6), 0 4px 12px var(--shadow);
+  cursor: zoom-in;
+}
+.portrait-frame img {
+  display: block; width: 100%; max-height: 340px; object-fit: contain;
+}
+.portrait-hint {
+  position: absolute; bottom: 8px; right: 10px;
+  font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.5px;
+  color: var(--parchment-light); background: rgba(20,12,5,0.72);
+  padding: 3px 8px; border-radius: 12px; border: 1px solid var(--leather-dark);
+}
+
+/* ---------- ability scores ---------- */
+.ability-grid {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+}
+.ability {
+  text-align: center; padding: 8px 4px; border-radius: var(--radius);
+  background: rgba(255,250,235,0.3); border: 1px solid var(--parchment-edge);
+}
+.ability-abbr { font-family: var(--font-ui); font-weight: 600; font-size: 13px; letter-spacing: 1px; }
+.ability-input { text-align: center; padding: 3px; margin-top: 2px; }
+.ability-score { font-family: var(--font-display); font-size: 22px; }
+.ability-mod {
+  font-family: var(--font-sc); color: var(--ink-faded); font-size: 14px; margin-top: 2px;
+}
+
+/* ---------- dice roller ---------- */
+.dice-btn {
+  font-family: var(--font-display); font-size: 16px;
+  min-width: 52px; padding: 8px 10px;
+  background: linear-gradient(180deg, var(--leather-light), var(--leather-dark));
+}
+.dice-log { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.dice-line {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 5px 10px; border-radius: 4px;
+  background: rgba(255,250,235,0.28); border: 1px solid var(--parchment-edge);
+}
+.dice-total {
+  font-family: var(--font-display); font-size: 22px; min-width: 40px; text-align: center;
+  color: var(--ink);
+}
+.dice-label { font-family: var(--font-ui); font-weight: 600; }
+.dice-detail { font-size: 14px; }
+.dice-line.crit { border-color: #2e7a3a; background: rgba(46,122,58,0.18); }
+.dice-line.crit .dice-total { color: #2e7a3a; }
+.dice-line.fumble { border-color: var(--wax-red); background: rgba(122,36,32,0.16); }
+.dice-line.fumble .dice-total { color: var(--wax-red); }
+
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--leather-dark); }
 ::-webkit-scrollbar-thumb {
@@ -572,6 +629,8 @@ body {
   /* Forms & toolbars stack cleanly */
   .toolbar .input, .toolbar .select { width: 100% !important; }
   .toolbar { width: 100%; }
+  .ability-grid { grid-template-columns: repeat(3, 1fr); }
+  .portrait-frame img { max-height: 260px; }
 }
 
 @media (max-width: 420px) {

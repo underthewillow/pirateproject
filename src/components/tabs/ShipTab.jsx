@@ -1,4 +1,5 @@
 import { useData } from '../../context/DataContext'
+import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
 
 export default function ShipTab() {
@@ -21,7 +22,7 @@ export default function ShipTab() {
             aspectRatio: '4/3',
             display: 'grid',
             placeItems: 'center',
-            backgroundImage: ship.image_url ? `url(${ship.image_url})` : undefined,
+            backgroundImage: ship.image_url ? `url("${assetUrl(ship.image_url)}")` : undefined,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             overflow: 'hidden',

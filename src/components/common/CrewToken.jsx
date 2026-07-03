@@ -9,7 +9,10 @@ export default function CrewToken({ member, onOpen, showRole = false }) {
     <div className="crew-token" onClick={() => onOpen?.(member)}>
       <Avatar member={member} size="sm" />
       <div>
-        <div className="name">{member.name}</div>
+        <div className="name">
+          {member.is_pc && <span className="pc-star" title="Player character">★</span>}
+          {member.name}
+        </div>
         {showRole && (
           roles.length > 0
             ? <div className="role-tag">{roles.join(' · ')}</div>
