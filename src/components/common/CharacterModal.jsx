@@ -12,10 +12,11 @@ const LOCATIONS = [
 // Full character sheet. Stats are a flexible key/value map so you can add
 // whatever your table cares about (STR, morale, bounty…) without a migration.
 export default function CharacterModal({ member, onClose }) {
-  const { patchItem, removeItem, roles, canEdit } = useData()
+  const { patchItem, removeItem, addRole, removeRole, roles, canEdit } = useData()
   if (!member) return null
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
+  const memberRoles = Array.isArray(member.roles) ? member.roles : []
   const setStats = (next) => patchItem('crew', member.id, { stats: next })
 
   const addStat = () => {
@@ -46,38 +47,44 @@ export default function CharacterModal({ member, onClose }) {
 
       <hr className="rule" />
 
-      <div className="panel-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div>
-          <label className="eyebrow">Whereabouts</label>
+      <div>
+        <label className="eyebrow">Whereabouts</label>
+        {canEdit ? (
+          <select
+            className="select"
+            style={{ maxWidth: 260 }}
+            value={member.location}
+            onChange={(e) => patchItem('crew', member.id, { location: e.target.value })}
+          >
+            {LOCATIONS.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+        ) : (
+          <div>{LOCATIONS.find((l) => l.value === member.location)?.label}</div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <label className="eyebrow">Roles aboard</label>
+        <div className="flex wrap gap-sm" style={{ marginTop: 6 }}>
           {canEdit ? (
-            <select
-              className="select"
-              value={member.location}
-              onChange={(e) => patchItem('crew', member.id, { location: e.target.value })}
-            >
-              {LOCATIONS.map((l) => (
-                <option key={l.value} value={l.value}>{l.label}</option>
-              ))}
-            </select>
+            roles.map((r) => {
+              const on = memberRoles.includes(r.name)
+              return (
+                <button
+                  key={r.id}
+                  className={`role-chip ${on ? 'on' : ''}`}
+                  onClick={() => (on ? removeRole(member.id, r.name) : addRole(member.id, r.name))}
+                >
+                  {on ? '✓ ' : ''}{r.name}
+                </button>
+              )
+            })
+          ) : memberRoles.length ? (
+            memberRoles.map((n) => <span key={n} className="badge main">{n}</span>)
           ) : (
-            <div>{LOCATIONS.find((l) => l.value === member.location)?.label}</div>
-          )}
-        </div>
-        <div>
-          <label className="eyebrow">Role aboard</label>
-          {canEdit ? (
-            <select
-              className="select"
-              value={member.role || ''}
-              onChange={(e) => patchItem('crew', member.id, { role: e.target.value || null })}
-            >
-              <option value="">— none —</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.name}>{r.name}</option>
-              ))}
-            </select>
-          ) : (
-            <div>{member.role || <span className="muted">none</span>}</div>
+            <span className="muted">none</span>
           )}
         </div>
       </div>

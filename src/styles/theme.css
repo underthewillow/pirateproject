@@ -6,37 +6,37 @@
    ============================================================ */
 
 :root {
-  /* Parchment */
-  --parchment: #e9d8b0;
-  --parchment-light: #f2e6c8;
-  --parchment-dark: #d8c290;
-  --parchment-edge: #c3a86f;
+  /* Aged parchment — darker, weathered, candlelit */
+  --parchment: #c3ab7c;
+  --parchment-light: #d3bd8d;
+  --parchment-dark: #a68c5c;
+  --parchment-edge: #7a6238;
 
-  /* Ink */
-  --ink: #2a1c0c;
-  --ink-soft: #4a381f;
-  --ink-faded: #6b573a;
+  /* Ink — near-black iron gall */
+  --ink: #221708;
+  --ink-soft: #382a16;
+  --ink-faded: #57452c;
 
-  /* Leather & wood */
-  --leather: #5b3a21;
-  --leather-dark: #3d2716;
-  --leather-darker: #2a1a0e;
-  --leather-light: #7a4f2e;
-  --wood: #6b4526;
-  --wood-dark: #4a2f19;
+  /* Leather & wood — dark, oiled */
+  --leather: #402716;
+  --leather-dark: #29170c;
+  --leather-darker: #150b05;
+  --leather-light: #573824;
+  --wood: #3a2413;
+  --wood-dark: #211406;
 
-  /* Metal / accents */
-  --brass: #b08d3f;
-  --brass-light: #d8b25a;
-  --gold: #c9a227;
-  --wax-red: #8a2f2b;
-  --sea: #35566b;
-  --sea-deep: #22384a;
+  /* Metal / accents — muted antique */
+  --brass: #96783a;
+  --brass-light: #b8964a;
+  --gold: #ad8b2c;
+  --wax-red: #742420;
+  --sea: #2a4552;
+  --sea-deep: #182a36;
 
-  --shadow: rgba(30, 18, 6, 0.45);
+  --shadow: rgba(8, 4, 1, 0.62);
 
-  --radius: 6px;
-  --font-display: 'Pirata One', 'Grenze', serif;
+  --radius: 5px;
+  --font-display: 'Cinzel', 'IM Fell English SC', serif;
   --font-body: 'IM Fell English', Georgia, serif;
   --font-sc: 'IM Fell English SC', 'IM Fell English', serif;
   --font-ui: 'Grenze', 'IM Fell English', serif;
@@ -50,10 +50,11 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background:
-    radial-gradient(circle at 20% 15%, rgba(0,0,0,0.28), transparent 55%),
-    radial-gradient(circle at 85% 90%, rgba(0,0,0,0.35), transparent 55%),
-    repeating-linear-gradient(45deg, rgba(0,0,0,0.02) 0 2px, transparent 2px 6px),
-    linear-gradient(135deg, #3a2817, #241609 60%, #1a0f06);
+    radial-gradient(circle at 20% 12%, rgba(0,0,0,0.42), transparent 55%),
+    radial-gradient(circle at 85% 92%, rgba(0,0,0,0.55), transparent 55%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 8px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #1f1206, #120a03 55%, #080401);
   background-attachment: fixed;
   font-size: 18px;
   -webkit-font-smoothing: antialiased;
@@ -70,10 +71,21 @@ body {
   color: var(--ink);
   border-radius: var(--radius);
   box-shadow:
-    inset 0 0 42px rgba(120, 84, 40, 0.35),
-    inset 0 0 4px rgba(80, 50, 20, 0.4),
-    0 8px 20px var(--shadow);
+    inset 0 0 60px rgba(60, 38, 16, 0.55),
+    inset 0 0 6px rgba(30, 18, 6, 0.5),
+    0 10px 26px var(--shadow);
   border: 1px solid var(--parchment-edge);
+}
+/* paper grain */
+.parchment::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  pointer-events: none;
+  opacity: 0.10;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 /* torn / burnt vignette on parchment edges */
 .parchment::after {
@@ -82,7 +94,7 @@ body {
   inset: 0;
   border-radius: var(--radius);
   pointer-events: none;
-  box-shadow: inset 0 0 26px rgba(60, 36, 12, 0.5);
+  box-shadow: inset 0 0 38px rgba(40, 24, 8, 0.7);
   mix-blend-mode: multiply;
 }
 
@@ -120,11 +132,11 @@ body {
 .masthead-title {
   font-family: var(--font-display);
   font-size: clamp(28px, 5vw, 46px);
-  letter-spacing: 1px;
-  color: var(--parchment-light);
-  text-shadow: 0 2px 0 #000, 0 0 16px rgba(200,160,70,0.35);
+  letter-spacing: 3px;
+  color: var(--brass-light);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.9), 0 2px 4px rgba(0,0,0,0.6);
   margin: 0;
-  line-height: 1;
+  line-height: 1.1;
 }
 .masthead-sub {
   font-family: var(--font-sc);
@@ -487,6 +499,32 @@ body {
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .hidden-when-locked { display: none; }
 .can-edit .hidden-when-locked { display: revert; }
+
+/* ---------- role chips (character sheet) ---------- */
+.role-chip {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 5px 11px;
+  border-radius: 14px;
+  cursor: pointer;
+  background: rgba(255,250,235,0.3);
+  border: 1px solid var(--parchment-edge);
+  color: var(--ink);
+  transition: filter 0.12s ease;
+}
+.role-chip:hover { filter: brightness(1.08); }
+.role-chip.on {
+  background: linear-gradient(180deg, var(--brass-light), var(--brass));
+  color: var(--leather-darker);
+  border-color: #5f4a1c;
+  font-weight: 600;
+}
+
+/* ---------- journal ---------- */
+.journal-entry { border-left: 3px solid var(--brass); }
+.journal-title { font-family: var(--font-display); font-size: 21px; letter-spacing: 0.5px; }
+.journal-body { white-space: pre-wrap; line-height: 1.65; }
+.journal-preview { white-space: normal; font-size: 15px; font-style: italic; }
 
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--leather-dark); }

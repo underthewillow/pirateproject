@@ -5,6 +5,7 @@ import InventoryTab from '../components/tabs/InventoryTab'
 import FundsTab from '../components/tabs/FundsTab'
 import MapTab from '../components/tabs/MapTab'
 import QuestsTab from '../components/tabs/QuestsTab'
+import JournalTab from '../components/tabs/JournalTab'
 
 // Adding a new section later = add one entry here + one component file.
 export const TABS = [
@@ -15,4 +16,5 @@ export const TABS = [
   { key: 'funds', label: 'Funds & Ledger', icon: '🪙', component: FundsTab },
   { key: 'map', label: 'The Map', icon: '🗺', component: MapTab },
   { key: 'quests', label: 'Posterboard', icon: '📜', component: QuestsTab },
+  { key: 'journal', label: 'Journal', icon: '📖', component: JournalTab },
 ]

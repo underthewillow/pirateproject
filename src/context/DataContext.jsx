@@ -21,6 +21,7 @@ const COLLECTIONS = {
   ledger: 'ledger_entries',
   locations: 'map_locations',
   quests: 'quests',
+  journal: 'journal_entries',
 }
 const SINGLETONS = { ship: 'ship', funds: 'funds' }
 const ALL_TABLES = [
@@ -44,6 +45,7 @@ export function DataProvider({ children }) {
     ledger: [],
     locations: [],
     quests: [],
+    journal: [],
     settings: {},
   })
   const [loading, setLoading] = useState(true)
@@ -65,6 +67,7 @@ export function DataProvider({ children }) {
         ledger,
         locations,
         quests,
+        journal,
         settingsRows,
       ] = await Promise.all([
         fetchAll('ship').then((r) => r[0] ?? null),
@@ -75,11 +78,12 @@ export function DataProvider({ children }) {
         fetchAll('ledger_entries', 'created_at'),
         fetchAll('map_locations', 'created_at'),
         fetchAll('quests'),
+        fetchAll('journal_entries'),
         fetchAll('settings', 'key'),
       ])
       const settings = {}
       for (const row of settingsRows) settings[row.key] = row.value
-      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, settings })
+      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, settings })
       setError(null)
     } catch (e) {
       console.error(e)
@@ -186,6 +190,22 @@ export function DataProvider({ children }) {
     }
   }, [])
 
+  // Multiple roles per crew member (roles is a text[] column).
+  const addRole = useCallback((memberId, roleName) => {
+    const m = dataRef.current.crew.find((c) => c.id === memberId)
+    if (!m) return
+    const current = Array.isArray(m.roles) ? m.roles : []
+    if (current.includes(roleName)) return
+    return patchItem('crew', memberId, { roles: [...current, roleName] })
+  }, [patchItem])
+
+  const removeRole = useCallback((memberId, roleName) => {
+    const m = dataRef.current.crew.find((c) => c.id === memberId)
+    if (!m) return
+    const current = Array.isArray(m.roles) ? m.roles : []
+    return patchItem('crew', memberId, { roles: current.filter((r) => r !== roleName) })
+  }, [patchItem])
+
   const patchSingleton = useCallback(async (key, patch) => {
     const table = SINGLETONS[key]
     setData((d) => ({ ...d, [key]: { ...d[key], ...patch } }))
@@ -228,10 +248,12 @@ export function DataProvider({ children }) {
       addItem,
       patchItem,
       removeItem,
+      addRole,
+      removeRole,
       patchSingleton,
       setSetting,
     }),
-    [data, loading, error, canEdit, unlock, lock, load, addItem, patchItem, removeItem, patchSingleton, setSetting]
+    [data, loading, error, canEdit, unlock, lock, load, addItem, patchItem, removeItem, addRole, removeRole, patchSingleton, setSetting]
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
