@@ -494,3 +494,50 @@ body {
   background: linear-gradient(180deg, var(--leather-light), var(--leather-dark));
   border-radius: 6px; border: 2px solid var(--leather-darker);
 }
+
+/* ============================================================
+   Responsive — phones & small tablets.
+   The !important on .panel-grid intentionally overrides the
+   inline grid-template-columns set in the tab components, so
+   every two/three-column layout collapses to a single column.
+   ============================================================ */
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .app { padding: 10px 10px 48px; }
+  .panel { padding: 16px 14px; }
+  .masthead { padding: 12px 16px; gap: 10px; }
+  .masthead-title { text-shadow: 0 2px 0 #000; }
+
+  /* Collapse all multi-column sections to one column */
+  .panel-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+
+  /* Tabs: let them scroll sideways instead of stacking into many rows */
+  .tabbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .tabbar::-webkit-scrollbar { height: 0; }
+  .tab { flex: 0 0 auto; font-size: 14px; padding: 9px 13px 8px; top: 0; }
+  .tab.active { padding-bottom: 10px; }
+
+  .section-title { font-size: 22px; }
+  .section-title.small { font-size: 18px; }
+
+  .modal { padding: 20px 18px; }
+
+  /* Give the map a taller, more usable shape on a narrow screen */
+  .map-stage { aspect-ratio: 3 / 4; }
+  .map-pin .label { font-size: 12px; }
+
+  /* Forms & toolbars stack cleanly */
+  .toolbar .input, .toolbar .select { width: 100% !important; }
+  .toolbar { width: 100%; }
+}
+
+@media (max-width: 420px) {
+  .avatar { width: 48px; height: 48px; font-size: 18px; }
+  .crew-token { padding: 6px 10px 6px 6px; }
+  .section-title { font-size: 20px; }
+}
