@@ -4,6 +4,7 @@ import Avatar from './Avatar'
 import Editable from './Editable'
 import Modal from './Modal'
 import DiceRoller, { abilityMod } from './DiceRoller'
+import StatBlock from './StatBlock'
 
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
@@ -124,62 +125,66 @@ export default function CharacterModal({ member, onClose }) {
         />
       </div>
 
-      {/* Ability scores — shown for players, or for anyone once scores are added */}
-      {(member.is_pc || ABILITIES.some((a) => abilityValue(a) !== '')) && (
-        <div style={{ marginTop: 14 }}>
-          <label className="eyebrow">Ability scores</label>
-          <div className="ability-grid" style={{ marginTop: 6 }}>
-            {ABILITIES.map((a) => {
-              const v = abilityValue(a)
-              return (
-                <div className="ability" key={a}>
-                  <div className="ability-abbr">{a}</div>
-                  {canEdit ? (
-                    <input
-                      className="input ability-input"
-                      type="number"
-                      value={v}
-                      placeholder="—"
-                      onChange={(e) => setAbility(a, e.target.value)}
-                    />
-                  ) : (
-                    <div className="ability-score">{v === '' ? '—' : v}</div>
-                  )}
-                  <div className="ability-mod">{v === '' ? '' : (abilityMod(v) >= 0 ? `+${abilityMod(v)}` : abilityMod(v))}</div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginTop: 14 }}>
-        <div className="row-between">
-          <label className="eyebrow">Details & stats</label>
-          {canEdit && <button className="btn small ghost" onClick={addStat}>+ stat</button>}
-        </div>
-        <div className="list" style={{ marginTop: 8 }}>
-          {generalStats.length === 0 && <span className="muted">No details recorded.</span>}
-          {generalStats.map(([k, v]) => (
-            <div className="row-between card" key={k}>
-              <strong>{k}</strong>
-              <span className="flex gap-sm" style={{ alignItems: 'center' }}>
-                <Editable value={v} onCommit={(nv) => setStats({ ...stats, [k]: nv })} placeholder="—" />
-                {canEdit && (
-                  <button
-                    className="btn small danger"
-                    onClick={() => { const n = { ...stats }; delete n[k]; setStats(n) }}
-                  >✕</button>
-                )}
-              </span>
+      {member.sheet_data ? (
+        <StatBlock member={member} />
+      ) : (
+        <>
+          {(member.is_pc || ABILITIES.some((a) => abilityValue(a) !== '')) && (
+            <div style={{ marginTop: 14 }}>
+              <label className="eyebrow">Ability scores</label>
+              <div className="ability-grid" style={{ marginTop: 6 }}>
+                {ABILITIES.map((a) => {
+                  const v = abilityValue(a)
+                  return (
+                    <div className="ability" key={a}>
+                      <div className="ability-abbr">{a}</div>
+                      {canEdit ? (
+                        <input
+                          className="input ability-input"
+                          type="number"
+                          value={v}
+                          placeholder="—"
+                          onChange={(e) => setAbility(a, e.target.value)}
+                        />
+                      ) : (
+                        <div className="ability-score">{v === '' ? '—' : v}</div>
+                      )}
+                      <div className="ability-mod">{v === '' ? '' : (abilityMod(v) >= 0 ? `+${abilityMod(v)}` : abilityMod(v))}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
+          )}
 
-      {/* Dice */}
-      <hr className="rule" />
-      <DiceRoller member={member} />
+          <div style={{ marginTop: 14 }}>
+            <div className="row-between">
+              <label className="eyebrow">Details & stats</label>
+              {canEdit && <button className="btn small ghost" onClick={addStat}>+ stat</button>}
+            </div>
+            <div className="list" style={{ marginTop: 8 }}>
+              {generalStats.length === 0 && <span className="muted">No details recorded.</span>}
+              {generalStats.map(([k, v]) => (
+                <div className="row-between card" key={k}>
+                  <strong>{k}</strong>
+                  <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                    <Editable value={v} onCommit={(nv) => setStats({ ...stats, [k]: nv })} placeholder="—" />
+                    {canEdit && (
+                      <button
+                        className="btn small danger"
+                        onClick={() => { const n = { ...stats }; delete n[k]; setStats(n) }}
+                      >✕</button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <hr className="rule" />
+          <DiceRoller member={member} />
+        </>
+      )}
 
       {(member.sheet_url || canEdit) && (
         <div style={{ marginTop: 14 }}>

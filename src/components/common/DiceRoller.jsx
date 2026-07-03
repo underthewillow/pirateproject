@@ -1,40 +1,13 @@
 import { useRef, useState } from 'react'
+import { rollDie, parseExpr, fmt, abilityMod } from '../../lib/dice'
+
+export { abilityMod }
 
 const DICE = [4, 6, 8, 10, 12, 20, 100]
 const ABILITIES = [
   ['STR', 'Strength'], ['DEX', 'Dexterity'], ['CON', 'Constitution'],
   ['INT', 'Intelligence'], ['WIS', 'Wisdom'], ['CHA', 'Charisma'],
 ]
-
-const rollDie = (sides) => Math.floor(Math.random() * sides) + 1
-export const abilityMod = (score) => Math.floor((Number(score) - 10) / 2)
-const fmt = (n) => (n >= 0 ? `+${n}` : `${n}`)
-
-// Parse an expression like "2d6+3", "d20-1", "1d8 + 2".
-function parseExpr(expr) {
-  const terms = expr.replace(/\s+/g, '').match(/[+-]?(\d*d\d+|\d+)/gi)
-  if (!terms) return null
-  let total = 0
-  const parts = []
-  for (let t of terms) {
-    let sign = 1
-    if (t[0] === '+') t = t.slice(1)
-    else if (t[0] === '-') { sign = -1; t = t.slice(1) }
-    const m = t.match(/^(\d*)d(\d+)$/i)
-    if (m) {
-      const n = Math.min(50, Math.max(1, parseInt(m[1] || '1', 10)))
-      const s = parseInt(m[2], 10)
-      const vals = Array.from({ length: n }, () => rollDie(s))
-      total += sign * vals.reduce((a, b) => a + b, 0)
-      parts.push(`${sign < 0 ? '−' : ''}${n}d${s}[${vals.join(', ')}]`)
-    } else {
-      const v = sign * parseInt(t, 10)
-      total += v
-      parts.push(fmt(v))
-    }
-  }
-  return { total, detail: parts.join(' ') }
-}
 
 // Read STR/DEX/… out of a flexible stats object (matches abbrev or full name).
 function readAbilities(stats) {
