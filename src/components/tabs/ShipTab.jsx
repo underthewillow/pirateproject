@@ -13,9 +13,9 @@ const REPAIRS = [
   { key: 'repair_sails', name: 'Repair the Sails', desc: 'Restore current speed to maximum.', cost: 50, apply: (sd) => ({ speedCurrent: sd.speedMax }) },
 ]
 const UPGRADES = [
-  { key: 'hull', name: 'Hull Reinforcement', desc: 'Increase maximum HP by 5.', cost: 500, apply: (sd) => ({ hpMax: (sd.hpMax || 0) + 5 }) },
-  { key: 'quarters', name: 'Expanded Quarters', desc: 'Increase crew capacity by 1.', cost: 400, apply: (sd) => ({ crewMax: (sd.crewMax || 0) + 1 }) },
-  { key: 'cannon', name: 'Additional Cannon', desc: 'Mount another cannon (+1 to the ship’s cannon attack).', cost: 750, apply: (sd) => ({ attacks: (sd.attacks || []).map((a) => (a.name === 'Cannons' ? { ...a, toHit: (a.toHit || 0) + 1 } : a)) }) },
+  { key: 'hull', name: 'Hull Reinforcement', desc: 'Increase maximum HP by 5.', cost: 150, apply: (sd) => ({ hpMax: (sd.hpMax || 0) + 5 }) },
+  { key: 'quarters', name: 'Expanded Quarters', desc: 'Increase crew capacity by 1.', cost: 200, apply: (sd) => ({ crewMax: (sd.crewMax || 0) + 1 }) },
+  { key: 'cannon', name: 'Enhanced Cannons', desc: 'Improve the guns (+1 to the ship’s cannon attack).', cost: 250, apply: (sd) => ({ attacks: (sd.attacks || []).map((a) => (a.name === 'Cannons' ? { ...a, toHit: (a.toHit || 0) + 1 } : a)) }) },
 ]
 
 export default function ShipTab() {
