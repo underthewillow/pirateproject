@@ -7,19 +7,41 @@ import Editable from '../common/Editable'
 
 const ABILS = ['STR', 'DEX', 'CON', 'CHA']
 
-// Quick repairs (repeatable) and permanent upgrades. Costs are easy to retune.
+// Quick repairs (repeatable). Costs are easy to retune.
 const REPAIRS = [
   { key: 'repair_hull', name: 'Repair the Hull', desc: 'Restore the ship’s HP to maximum.', cost: 50, apply: (sd) => ({ hpCurrent: sd.hpMax }) },
   { key: 'repair_sails', name: 'Repair the Sails', desc: 'Restore current speed to maximum.', cost: 50, apply: (sd) => ({ speedCurrent: sd.speedMax }) },
 ]
-const UPGRADES = [
-  { key: 'hull', name: 'Hull Reinforcement', desc: 'Increase maximum HP by 5.', cost: 150, apply: (sd) => ({ hpMax: (sd.hpMax || 0) + 5 }) },
-  { key: 'quarters', name: 'Expanded Quarters', desc: 'Increase crew capacity by 1.', cost: 200, apply: (sd) => ({ crewMax: (sd.crewMax || 0) + 1 }) },
-  { key: 'cannon', name: 'Enhanced Cannons', desc: 'Improve the guns (+1 to the ship’s cannon attack).', cost: 250, apply: (sd) => ({ attacks: (sd.attacks || []).map((a) => (a.name === 'Cannons' ? { ...a, toHit: (a.toHit || 0) + 1 } : a)) }) },
+
+// Upgrades are a data-driven, editable catalog (stored in settings.shipyard_upgrades).
+// Each effect is a numeric delta on one stat, so installing and un-installing are
+// perfectly reversible. Editable in-app when the log is unlocked.
+const STAT_OPTS = [
+  { v: 'hpMax', label: 'Max HP' },
+  { v: 'crewMax', label: 'Crew capacity' },
+  { v: 'passengerMax', label: 'Passenger capacity' },
+  { v: 'ac', label: 'Armor Class' },
+  { v: 'speedMax', label: 'Max Speed' },
+  { v: 'cannonHit', label: 'Cannon to-hit' },
 ]
+const DEFAULT_UPGRADES = [
+  { id: 'hull', name: 'Hull Reinforcement', desc: 'Reinforce the hull with iron banding.', cost: 150, stat: 'hpMax', amount: 5, installed: false },
+  { id: 'quarters', name: 'Expanded Quarters', desc: 'Sling extra hammocks below decks.', cost: 200, stat: 'crewMax', amount: 1, installed: false },
+  { id: 'cannon', name: 'Enhanced Cannons', desc: 'Bored and trued barrels — steadier fire.', cost: 250, stat: 'cannonHit', amount: 1, installed: false },
+]
+const statLabel = (v) => STAT_OPTS.find((o) => o.v === v)?.label || v
+const effectLabel = (u) => `${Number(u.amount) >= 0 ? '+' : ''}${u.amount} ${statLabel(u.stat)}`
+// Return the ship_data patch for applying `amount` of `stat` (negate to reverse).
+function effectPatch(sd, stat, amount) {
+  const n = Number(amount) || 0
+  if (stat === 'cannonHit') {
+    return { attacks: (sd.attacks || []).map((a) => (a.name === 'Cannons' ? { ...a, toHit: (a.toHit || 0) + n } : a)) }
+  }
+  return { [stat]: (Number(sd[stat]) || 0) + n }
+}
 
 export default function ShipTab() {
-  const { ship, crew, settings, patchSingleton, addItem, canEdit } = useData()
+  const { ship, crew, settings, patchSingleton, addItem, setSetting, canEdit } = useData()
   const roller = useRoller()
   const [mode, setMode] = useState('normal')
   const [pass, setPass] = useState('')
@@ -36,7 +58,13 @@ export default function ShipTab() {
   const crewMax = sd.crewMax ?? 14
   const paxMax = sd.passengerMax ?? 5
   const hpCur = sd.hpCurrent ?? sd.hpMax ?? 0
-  const applied = Array.isArray(ship.upgrades) ? ship.upgrades : []
+
+  // Upgrade catalog (editable, persisted in settings). Falls back to defaults.
+  const upgrades = Array.isArray(settings?.shipyard_upgrades) && settings.shipyard_upgrades.length
+    ? settings.shipyard_upgrades
+    : DEFAULT_UPGRADES
+  const installedList = upgrades.filter((u) => u.installed)
+  const saveUpgrades = (next) => setSetting('shipyard_upgrades', next)
 
   const setSd = (patch) => patchSingleton('ship', { ship_data: { ...sd, ...patch } })
   const setHp = (v) => setSd({ hpCurrent: Math.max(0, Math.min(Number(v) || 0, (sd.hpMax || 0) + 200)) })
@@ -51,12 +79,36 @@ export default function ShipTab() {
     if (shipyardPass == null || String(pass) === String(shipyardPass)) { setYardOpen(true); setPassErr(false) }
     else setPassErr(true)
   }
-  const applyYardItem = async (item, isRepair) => {
-    if (!confirm(`${item.name} for ${item.cost} gp? This records a shipyard expense in the ledger.`)) return
-    const upd = { ship_data: { ...sd, ...item.apply(sd) } }
-    if (!isRepair) upd.upgrades = [...applied, { key: item.key, name: item.name, cost: item.cost }]
-    await patchSingleton('ship', upd)
+  const buyRepair = async (item) => {
+    await patchSingleton('ship', { ship_data: { ...sd, ...item.apply(sd) } })
     await addItem('ledger', { description: `Shipyard — ${item.name}`, amount: -Math.abs(item.cost), category: 'Shipyard' })
+  }
+
+  // Install / uninstall is a reversible toggle: it applies (or reverses) the
+  // stat effect, flips the flag, and records the cost (or a refund) in the ledger.
+  const toggleInstall = async (u) => {
+    const turningOn = !u.installed
+    const patch = effectPatch(sd, u.stat, turningOn ? u.amount : -u.amount)
+    await patchSingleton('ship', { ship_data: { ...sd, ...patch } })
+    saveUpgrades(upgrades.map((x) => (x.id === u.id ? { ...x, installed: turningOn } : x)))
+    await addItem('ledger', {
+      description: `Shipyard — ${turningOn ? 'installed' : 'removed'} ${u.name}`,
+      amount: (turningOn ? -1 : 1) * Math.abs(Number(u.cost) || 0),
+      category: 'Shipyard',
+    })
+  }
+
+  const patchUpgrade = (id, patch) => saveUpgrades(upgrades.map((u) => (u.id === id ? { ...u, ...patch } : u)))
+  const addUpgrade = () => {
+    const id = 'u_' + Math.random().toString(36).slice(2, 8)
+    saveUpgrades([...upgrades, { id, name: 'New Upgrade', desc: '', cost: 100, stat: 'hpMax', amount: 5, installed: false }])
+  }
+  const deleteUpgrade = async (u) => {
+    if (u.installed) {
+      const patch = effectPatch(sd, u.stat, -u.amount) // reverse before removing
+      await patchSingleton('ship', { ship_data: { ...sd, ...patch } })
+    }
+    saveUpgrades(upgrades.filter((x) => x.id !== u.id))
   }
 
   const Tile = ({ num, lbl, span, danger }) => (
@@ -168,13 +220,13 @@ export default function ShipTab() {
         <div className="sb-section-title">Upgrades & Shipyard</div>
         {!yardOpen ? (
           <div className="card">
-            <p style={{ margin: '0 0 10px' }}>⚓ Visit a shipyard to learn about upgrade options.</p>
+            <p style={{ margin: '0 0 10px' }}>⚓ Visit a shipyard to fit repairs and upgrades.</p>
             <form className="toolbar" onSubmit={tryUnlock}>
               <input className="input" type="password" style={{ maxWidth: 220 }} placeholder="shipyard password" value={pass} onChange={(e) => { setPass(e.target.value); setPassErr(false) }} />
               <button className="btn brass" type="submit">Enter shipyard</button>
             </form>
             {passErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>That gate stays shut. (Wrong password.)</p>}
-            {applied.length > 0 && <p className="muted" style={{ fontSize: 13, marginTop: 10, marginBottom: 0 }}>Installed: {applied.map((u) => u.name).join(', ')}.</p>}
+            {installedList.length > 0 && <p className="muted" style={{ fontSize: 13, marginTop: 10, marginBottom: 0 }}>Fitted: {installedList.map((u) => u.name).join(', ')}.</p>}
           </div>
         ) : (
           <div>
@@ -187,23 +239,60 @@ export default function ShipTab() {
               {REPAIRS.map((u) => (
                 <div className="card row-between" key={u.key}>
                   <div className="grow"><strong>{u.name}</strong><div className="muted" style={{ fontSize: 14 }}>{u.desc}</div></div>
-                  <div className="flex gap-sm" style={{ alignItems: 'center' }}><span className="coin gold" title="cost">{u.cost}</span><button className="btn brass small" onClick={() => applyYardItem(u, true)}>Buy</button></div>
+                  <div className="flex gap-sm" style={{ alignItems: 'center' }}><span className="coin gold" title="cost">{u.cost}</span><button className="btn brass small" onClick={() => buyRepair(u)}>Buy</button></div>
                 </div>
               ))}
             </div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>Permanent Upgrades</div>
-            <div className="list">
-              {UPGRADES.map((u) => {
-                const count = applied.filter((a) => a.key === u.key).length
-                return (
-                  <div className="card row-between" key={u.key}>
-                    <div className="grow"><strong>{u.name}</strong>{count > 0 && <span className="muted"> · installed ×{count}</span>}<div className="muted" style={{ fontSize: 14 }}>{u.desc}</div></div>
-                    <div className="flex gap-sm" style={{ alignItems: 'center' }}><span className="coin gold" title="cost">{u.cost}</span><button className="btn brass small" onClick={() => applyYardItem(u, false)}>Install</button></div>
-                  </div>
-                )
-              })}
+            <div className="row-between" style={{ marginBottom: 6 }}>
+              <span className="eyebrow">Upgrades</span>
+              {canEdit && <button className="btn small ghost" onClick={addUpgrade}>+ add upgrade</button>}
             </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Purchases record the cost as a ledger expense. Costs are placeholders — easy to retune.</p>
+            <div className="list">
+              {upgrades.map((u) => (
+                <div className={`card ${u.installed ? 'yard-installed' : ''}`} key={u.id}>
+                  <div className="row-between" style={{ alignItems: 'flex-start' }}>
+                    <div className="grow">
+                      <strong>
+                        <Editable value={u.name} onCommit={(v) => patchUpgrade(u.id, { name: v })} />
+                      </strong>
+                      {u.installed && <span className="badge main" style={{ marginLeft: 6 }}>fitted</span>}
+                      <div className="muted" style={{ fontSize: 14 }}>
+                        <Editable value={u.desc} placeholder="describe the upgrade…" onCommit={(v) => patchUpgrade(u.id, { desc: v })} />
+                      </div>
+                    </div>
+                    <div className="flex gap-sm" style={{ alignItems: 'center' }}>
+                      <span className="coin gold" title="cost">
+                        {canEdit ? <Editable type="number" value={u.cost} onCommit={(v) => patchUpgrade(u.id, { cost: Number(v) })} /> : u.cost}
+                      </span>
+                      <button className={`btn small ${u.installed ? 'ghost' : 'brass'}`} onClick={() => toggleInstall(u)}>
+                        {u.installed ? 'Uninstall' : 'Install'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="row-between" style={{ marginTop: 8, alignItems: 'center' }}>
+                    {canEdit && !u.installed ? (
+                      <span className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                        <span className="muted">effect</span>
+                        <input className="input" type="number" style={{ width: 64 }} value={u.amount}
+                          onChange={(e) => patchUpgrade(u.id, { amount: Number(e.target.value) })} />
+                        <select className="select" style={{ width: 170 }} value={u.stat}
+                          onChange={(e) => patchUpgrade(u.id, { stat: e.target.value })}>
+                          {STAT_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                        </select>
+                      </span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: 13 }}>Effect: {effectLabel(u)}{u.installed && canEdit ? ' · uninstall to edit' : ''}</span>
+                    )}
+                    {canEdit && <button className="btn small danger" onClick={() => deleteUpgrade(u)}>Remove</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Install/Uninstall is a reversible toggle — installing records the cost in the ledger, uninstalling refunds it.
+              {canEdit ? ' Unlocked: edit names, costs and effects, or add your own.' : ' Unlock the log up top to edit or add upgrades.'}
+            </p>
           </div>
         )}
 
