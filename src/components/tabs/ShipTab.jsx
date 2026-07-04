@@ -7,11 +7,15 @@ import Editable from '../common/Editable'
 
 const ABILS = ['STR', 'DEX', 'CON', 'CHA']
 
-// Shipyard upgrade catalogue. Costs are placeholders — easy to tweak later.
+// Quick repairs (repeatable) and permanent upgrades. Costs are easy to retune.
+const REPAIRS = [
+  { key: 'repair_hull', name: 'Repair the Hull', desc: 'Restore the ship’s HP to maximum.', cost: 50, apply: (sd) => ({ hpCurrent: sd.hpMax }) },
+  { key: 'repair_sails', name: 'Repair the Sails', desc: 'Restore current speed to maximum.', cost: 50, apply: (sd) => ({ speedCurrent: sd.speedMax }) },
+]
 const UPGRADES = [
-  { key: 'hull', name: 'Hull Reinforcement', desc: 'Increase the ship’s maximum HP by 5.', cost: 150, apply: (sd) => ({ hpMax: (sd.hpMax || 0) + 5 }) },
-  { key: 'quarters', name: 'Expanded Quarters', desc: 'Increase crew capacity by 1.', cost: 100, apply: (sd) => ({ crewMax: (sd.crewMax || 0) + 1 }) },
-  { key: 'cannon', name: 'Additional Cannon', desc: 'Mount another cannon (+1 to the ship’s attack bonus).', cost: 200, apply: (sd) => ({ atk: (sd.atk || 0) + 1 }) },
+  { key: 'hull', name: 'Hull Reinforcement', desc: 'Increase maximum HP by 5.', cost: 500, apply: (sd) => ({ hpMax: (sd.hpMax || 0) + 5 }) },
+  { key: 'quarters', name: 'Expanded Quarters', desc: 'Increase crew capacity by 1.', cost: 400, apply: (sd) => ({ crewMax: (sd.crewMax || 0) + 1 }) },
+  { key: 'cannon', name: 'Additional Cannon', desc: 'Mount another cannon (+1 to the ship’s cannon attack).', cost: 750, apply: (sd) => ({ attacks: (sd.attacks || []).map((a) => (a.name === 'Cannons' ? { ...a, toHit: (a.toHit || 0) + 1 } : a)) }) },
 ]
 
 export default function ShipTab() {
@@ -25,26 +29,21 @@ export default function ShipTab() {
   if (!ship) return <p className="muted">No ship on record.</p>
   const sd = ship.ship_data || {}
   const abilities = sd.abilities || {}
+  const attacks = sd.attacks || []
+  const traits = sd.traits || []
   const aboard = crew.filter((c) => c.location === 'ship').length
-  const crewMax = sd.crewMax ?? 15
+  const pax = crew.filter((c) => c.location === 'passenger').length
+  const crewMax = sd.crewMax ?? 14
+  const paxMax = sd.passengerMax ?? 5
   const hpCur = sd.hpCurrent ?? sd.hpMax ?? 0
   const applied = Array.isArray(ship.upgrades) ? ship.upgrades : []
 
   const setSd = (patch) => patchSingleton('ship', { ship_data: { ...sd, ...patch } })
   const setHp = (v) => setSd({ hpCurrent: Math.max(0, Math.min(Number(v) || 0, (sd.hpMax || 0) + 200)) })
 
-  const rollAbility = (ab) => {
-    const r = rollD20(abilities[ab] || 0, mode)
-    roller?.show({ label: `Ship ${ab} check`, total: r.total, detail: r.detail, face: r.base, crit: r.crit, fumble: r.fumble })
-  }
-  const rollAttack = () => {
-    const r = rollD20(sd.atk || 0, mode)
-    roller?.show({ label: 'Cannons — to hit', total: r.total, detail: r.detail, face: r.base, crit: r.crit, fumble: r.fumble })
-  }
-  const rollDamage = () => {
-    const r = parseExpr(sd.damage || '1d8')
-    if (r) roller?.show({ label: 'Cannons — damage', total: r.total, detail: r.detail })
-  }
+  const rollAbility = (ab) => { const r = rollD20(abilities[ab] || 0, mode); roller?.show({ label: `Ship ${ab} check`, total: r.total, detail: r.detail, face: r.base, crit: r.crit, fumble: r.fumble }) }
+  const rollHit = (at) => { const r = rollD20(at.toHit || 0, mode); roller?.show({ label: `${at.name} — to hit`, total: r.total, detail: r.detail, face: r.base, crit: r.crit, fumble: r.fumble }) }
+  const rollDmg = (at) => { const r = parseExpr(at.dmg || '1d8'); if (r) roller?.show({ label: `${at.name} — damage`, total: r.total, detail: r.detail }) }
 
   const shipyardPass = settings?.shipyard_passphrase
   const tryUnlock = (e) => {
@@ -52,24 +51,25 @@ export default function ShipTab() {
     if (shipyardPass == null || String(pass) === String(shipyardPass)) { setYardOpen(true); setPassErr(false) }
     else setPassErr(true)
   }
-  const applyUpgrade = async (u) => {
-    if (!confirm(`Apply "${u.name}" for ${u.cost} gp? This records a shipyard expense in the ledger.`)) return
-    await patchSingleton('ship', { ship_data: { ...sd, ...u.apply(sd) }, upgrades: [...applied, { key: u.key, name: u.name, cost: u.cost }] })
-    await addItem('ledger', { description: `Shipyard — ${u.name}`, amount: -Math.abs(u.cost), category: 'Shipyard' })
+  const applyYardItem = async (item, isRepair) => {
+    if (!confirm(`${item.name} for ${item.cost} gp? This records a shipyard expense in the ledger.`)) return
+    const upd = { ship_data: { ...sd, ...item.apply(sd) } }
+    if (!isRepair) upd.upgrades = [...applied, { key: item.key, name: item.name, cost: item.cost }]
+    await patchSingleton('ship', upd)
+    await addItem('ledger', { description: `Shipyard — ${item.name}`, amount: -Math.abs(item.cost), category: 'Shipyard' })
   }
+
+  const Tile = ({ num, lbl, span, danger }) => (
+    <div className="sb-stat" style={span ? { gridColumn: `span ${span}` } : undefined}>
+      <div className="sb-stat-num" style={danger ? { color: 'var(--wax-red)' } : undefined}>{num}</div>
+      <div className="sb-stat-lbl">{lbl}</div>
+    </div>
+  )
 
   return (
     <div className="panel-grid" style={{ gridTemplateColumns: 'minmax(260px, 1fr) 1.5fr', alignItems: 'start' }}>
-      {/* Portrait + identity */}
       <div>
-        <div
-          className="card"
-          style={{
-            aspectRatio: '4/3', display: 'grid', placeItems: 'center', overflow: 'hidden',
-            backgroundImage: ship.image_url ? `url("${assetUrl(ship.image_url)}")` : undefined,
-            backgroundSize: 'cover', backgroundPosition: 'center',
-          }}
-        >
+        <div className="card" style={{ aspectRatio: '4/3', display: 'grid', placeItems: 'center', overflow: 'hidden', backgroundImage: ship.image_url ? `url("${assetUrl(ship.image_url)}")` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
           {!ship.image_url && <span className="muted center">⛵<br />Add a portrait of the ship</span>}
         </div>
         {canEdit && (
@@ -82,13 +82,11 @@ export default function ShipTab() {
           <Editable value={ship.name} onCommit={(v) => patchSingleton('ship', { name: v })} />
         </h2>
         <div className="sb-classline">
-          <Editable value={sd.class} onCommit={(v) => setSd({ class: v })} /> · {sd.size} · Speed {sd.speed}
+          <Editable value={sd.class} onCommit={(v) => setSd({ class: v })} /> · {sd.size}
         </div>
-        <Editable as="p" className="muted" style={{ fontStyle: 'italic' }} placeholder="a motto for her"
-          value={ship.tagline} onCommit={(v) => patchSingleton('ship', { tagline: v })} />
+        <Editable as="p" className="muted" style={{ fontStyle: 'italic' }} placeholder="a motto for her" value={ship.tagline} onCommit={(v) => patchSingleton('ship', { tagline: v })} />
       </div>
 
-      {/* Stat block */}
       <div>
         <div className="sb-rollbar">
           <div className="toolbar" style={{ gap: 6 }}>
@@ -99,7 +97,6 @@ export default function ShipTab() {
           </div>
         </div>
 
-        {/* combat row */}
         <div className="sb-combat" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <div className="sb-stat">
             <div className="sb-stat-num">{canEdit ? <input className="input sb-hp-input" type="number" value={sd.ac ?? ''} onChange={(e) => setSd({ ac: Number(e.target.value) })} /> : sd.ac}</div>
@@ -117,17 +114,20 @@ export default function ShipTab() {
               <button className="btn small ghost" onClick={() => setHp(sd.hpMax)}>full</button>
             </div>
           </div>
-          <div className="sb-stat"><div className="sb-stat-num">{sd.hd}</div><div className="sb-stat-lbl">Hit Dice</div></div>
-          <div className="sb-stat"><div className="sb-stat-num">{sd.speed}</div><div className="sb-stat-lbl">Speed</div></div>
-          <div className="sb-stat"><div className="sb-stat-num">{sd.actions}</div><div className="sb-stat-lbl">Actions</div></div>
-          <div className="sb-stat"><div className="sb-stat-num">{sd.cargo}</div><div className="sb-stat-lbl">Cargo Holds</div></div>
-          <div className="sb-stat" style={{ gridColumn: 'span 2' }}>
-            <div className="sb-stat-num" style={{ color: aboard > crewMax ? 'var(--wax-red)' : undefined }}>{aboard} <span className="muted" style={{ fontSize: 16 }}>/ {crewMax}</span></div>
-            <div className="sb-stat-lbl">Crew Aboard</div>
+          <Tile num={sd.hd} lbl="Hit Dice" />
+          <div className="sb-stat">
+            <div className="sb-stat-num">
+              {canEdit ? <input className="input sb-hp-input" type="number" value={sd.speedCurrent ?? ''} onChange={(e) => setSd({ speedCurrent: Number(e.target.value) })} /> : (sd.speedCurrent ?? sd.speedMax)}
+              <span className="muted" style={{ fontSize: 14 }}> / {sd.speedMax}</span>
+            </div>
+            <div className="sb-stat-lbl">Speed</div>
           </div>
+          <Tile num={sd.actions} lbl="Actions" />
+          <Tile num={sd.cargo} lbl="Cargo Holds" />
+          <div className="sb-stat"><div className="sb-stat-num" style={aboard > crewMax ? { color: 'var(--wax-red)' } : undefined}>{aboard} <span className="muted" style={{ fontSize: 15 }}>/ {crewMax}</span></div><div className="sb-stat-lbl">Crew</div></div>
+          <div className="sb-stat"><div className="sb-stat-num" style={pax > paxMax ? { color: 'var(--wax-red)' } : undefined}>{pax} <span className="muted" style={{ fontSize: 15 }}>/ {paxMax}</span></div><div className="sb-stat-lbl">Passengers</div></div>
         </div>
 
-        {/* abilities */}
         <div className="sb-abilities" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           {ABILS.map((ab) => (
             <div className="sb-abil" key={ab}>
@@ -140,27 +140,31 @@ export default function ShipTab() {
           ))}
         </div>
 
-        {/* attack */}
         <div className="sb-section-title">Broadside</div>
         <div className="sb-attacks">
-          <div className="sb-attack">
-            <div className="sb-attack-info">
-              <div className="sb-attack-name">Cannons</div>
-              <div className="sb-attack-sub muted">{sd.actions}× per round{sd.traits && sd.traits.length ? ` · ${sd.traits.join(', ')}` : ''}</div>
+          {attacks.map((at, i) => (
+            <div className="sb-attack" key={i}>
+              <div className="sb-attack-info">
+                <div className="sb-attack-name">{at.name}</div>
+                <div className="sb-attack-sub muted">{at.note}</div>
+              </div>
+              <button className="btn small sb-atk-btn" onClick={() => rollHit(at)} title="Roll to hit">{fmt(at.toHit || 0)} hit</button>
+              <button className="btn small brass sb-atk-btn" onClick={() => rollDmg(at)} title="Roll damage">{at.dmg}</button>
             </div>
-            <button className="btn small sb-atk-btn" onClick={rollAttack} title="Roll to hit">{fmt(sd.atk || 0)} hit</button>
-            <button className="btn small brass sb-atk-btn" onClick={rollDamage} title="Roll damage">{sd.damage}</button>
-          </div>
+          ))}
         </div>
 
-        {sd.traits && sd.traits.length > 0 && (
+        {traits.length > 0 && (
           <>
             <div className="sb-section-title">Traits</div>
-            <div className="sb-taglist">{sd.traits.map((t, i) => <span key={i} className="sb-tag">{t}</span>)}</div>
+            <div className="list">
+              {traits.map((t, i) => (
+                <div className="card" key={i}><strong>{t.name}.</strong> <span className="muted">{t.desc}</span></div>
+              ))}
+            </div>
           </>
         )}
 
-        {/* Shipyard upgrades */}
         <div className="sb-section-title">Upgrades & Shipyard</div>
         {!yardOpen ? (
           <div className="card">
@@ -178,28 +182,31 @@ export default function ShipTab() {
               <span className="eyebrow">Shipwright's offerings</span>
               <button className="btn small ghost" onClick={() => setYardOpen(false)}>Leave shipyard</button>
             </div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Repairs</div>
+            <div className="list" style={{ marginBottom: 14 }}>
+              {REPAIRS.map((u) => (
+                <div className="card row-between" key={u.key}>
+                  <div className="grow"><strong>{u.name}</strong><div className="muted" style={{ fontSize: 14 }}>{u.desc}</div></div>
+                  <div className="flex gap-sm" style={{ alignItems: 'center' }}><span className="coin gold" title="cost">{u.cost}</span><button className="btn brass small" onClick={() => applyYardItem(u, true)}>Buy</button></div>
+                </div>
+              ))}
+            </div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Permanent Upgrades</div>
             <div className="list">
               {UPGRADES.map((u) => {
                 const count = applied.filter((a) => a.key === u.key).length
                 return (
                   <div className="card row-between" key={u.key}>
-                    <div className="grow">
-                      <strong>{u.name}</strong>{count > 0 && <span className="muted"> · installed ×{count}</span>}
-                      <div className="muted" style={{ fontSize: 14 }}>{u.desc}</div>
-                    </div>
-                    <div className="flex gap-sm" style={{ alignItems: 'center' }}>
-                      <span className="coin gold" title="cost">{u.cost}</span>
-                      <button className="btn brass small" onClick={() => applyUpgrade(u)}>Install</button>
-                    </div>
+                    <div className="grow"><strong>{u.name}</strong>{count > 0 && <span className="muted"> · installed ×{count}</span>}<div className="muted" style={{ fontSize: 14 }}>{u.desc}</div></div>
+                    <div className="flex gap-sm" style={{ alignItems: 'center' }}><span className="coin gold" title="cost">{u.cost}</span><button className="btn brass small" onClick={() => applyYardItem(u, false)}>Install</button></div>
                   </div>
                 )
               })}
             </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Installing records the cost as a ledger expense. Costs are placeholders — we can refine them.</p>
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Purchases record the cost as a ledger expense. Costs are placeholders — easy to retune.</p>
           </div>
         )}
 
-        {/* notes */}
         <div style={{ marginTop: 18 }}>
           <label className="eyebrow">Captain's notes</label>
           <Editable as="p" multiline placeholder="Anything worth remembering about her…" value={ship.notes} onCommit={(v) => patchSingleton('ship', { notes: v })} />

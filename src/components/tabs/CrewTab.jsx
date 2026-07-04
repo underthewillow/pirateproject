@@ -7,13 +7,14 @@ import CharacterModal from '../common/CharacterModal'
 
 const ZONES = [
   { id: 'ship', title: 'Aboard the Ship', note: 'Hands currently sailing with us.' },
+  { id: 'passenger', title: 'Passengers', note: 'Temporary guests aboard — they can’t stay overnight or long rest on the ship.' },
   { id: 'shore', title: 'Ashore', note: 'Off the ship — in port or elsewhere.' },
   { id: 'available', title: 'Available Crew', note: 'Reserve hands. Drag them into a station above.' },
 ]
 
 export default function CrewTab() {
   const { crew, ship, patchItem, addItem, canEdit } = useData()
-  const crewMax = ship?.ship_data?.crewMax ?? 15
+  const caps = { ship: ship?.ship_data?.crewMax ?? 14, passenger: ship?.ship_data?.passengerMax ?? 5 }
   const [openId, setOpenId] = useState(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -51,8 +52,8 @@ export default function CrewTab() {
             return (
               <Droppable key={z.id} id={z.id} data={{ zone: z.id }} className="dropzone">
                 <div className="row-between">
-                  <div className="dropzone-label" style={z.id === 'ship' && members.length > crewMax ? { color: 'var(--wax-red)' } : undefined}>
-                    {z.title} · {members.length}{z.id === 'ship' ? ` / ${crewMax}` : ''}
+                  <div className="dropzone-label" style={caps[z.id] != null && members.length > caps[z.id] ? { color: 'var(--wax-red)' } : undefined}>
+                    {z.title} · {members.length}{caps[z.id] != null ? ` / ${caps[z.id]}` : ''}
                   </div>
                 </div>
                 <div className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 10 }}>{z.note}</div>

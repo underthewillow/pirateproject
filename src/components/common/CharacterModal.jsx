@@ -8,6 +8,7 @@ import StatBlock from './StatBlock'
 
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
+  { value: 'passenger', label: 'Passenger' },
   { value: 'shore', label: 'Ashore' },
   { value: 'available', label: 'Available (reserve)' },
 ]
