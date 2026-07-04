@@ -624,12 +624,22 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
 .sb-skill-mod { font-family: var(--font-sc); min-width: 30px; text-align: right; }
 
 .sb-attacks { display: flex; flex-direction: column; gap: 6px; }
-.sb-attack { border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); padding: 8px 10px; }
-.sb-attack-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sb-attack-name { font-family: var(--font-ui); font-weight: 600; flex: 1; min-width: 110px; }
-.sb-atk-btn { font-family: var(--font-sc); }
-.sb-attack-meta { font-size: 12px; }
-.sb-attack-notes { font-size: 13px; margin-top: 5px; }
+.sb-attack {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px;
+  border: 1px solid var(--parchment-edge); border-radius: var(--radius);
+  background: rgba(255,250,235,0.3); padding: 8px 10px;
+}
+.sb-attack-info { min-width: 0; }
+.sb-attack-name { font-family: var(--font-ui); font-weight: 600; }
+.sb-attack-sub { font-size: 12px; }
+.sb-atk-btn { font-family: var(--font-ui); white-space: nowrap; min-width: 64px; text-align: center; }
+
+/* spells & features tag lists */
+.sb-taglist { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-tag {
+  font-family: var(--font-body); font-size: 13px; padding: 3px 10px; border-radius: 12px;
+  background: rgba(255,250,235,0.4); border: 1px solid var(--parchment-edge); color: var(--ink);
+}
 
 .sb-spell { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); }
 

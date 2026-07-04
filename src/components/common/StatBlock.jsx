@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useRoller } from '../../context/RollContext'
 import { parseExpr, rollD20, fmt } from '../../lib/dice'
-import { fetchDdbSheet } from '../../lib/ddb'
 
 const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 
@@ -15,8 +14,6 @@ export default function StatBlock({ member }) {
   const [mode, setMode] = useState('normal')
   const [expr, setExpr] = useState('')
   const [log, setLog] = useState([])
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState('')
   const counter = useRef(0)
   if (!s) return null
 
@@ -24,21 +21,6 @@ export default function StatBlock({ member }) {
   const d20 = (label, m) => { const r = rollD20(m, mode); push({ label, detail: r.detail, total: r.total, crit: r.crit, fumble: r.fumble, face: r.base }) }
   const dmg = (label, e) => { const r = parseExpr(e); if (r) push({ label: `${label} damage`, detail: r.detail, total: r.total }) }
   const custom = () => { const r = parseExpr(expr); if (r) push({ label: expr.trim(), detail: r.detail, total: r.total }) }
-
-  const ddbId = String(member.sheet_url || '').match(/\d{6,}/)?.[0]
-  const sync = async () => {
-    setSyncing(true); setSyncMsg('')
-    try {
-      const sheet = await fetchDdbSheet(member.sheet_url)
-      await patchItem('crew', member.id, { sheet_data: sheet })
-      setSyncMsg('Synced from D&D Beyond ✓')
-    } catch (err) {
-      setSyncMsg(err.message || 'Sync failed')
-    } finally {
-      setSyncing(false)
-      setTimeout(() => setSyncMsg(''), 5000)
-    }
-  }
 
   const setSheet = (patch) => patchItem('crew', member.id, { sheet_data: { ...s, ...patch } })
   const cur = s.hpCurrent ?? s.maxHp
@@ -49,15 +31,7 @@ export default function StatBlock({ member }) {
 
   return (
     <div className="statblock">
-      <div className="sb-topline">
-        <div className="sb-classline">{s.classLine} · {s.race}{s.alignment ? ` · ${s.alignment}` : ''}</div>
-        {ddbId && canEdit && (
-          <button className="btn small sb-sync-btn" disabled={syncing} onClick={sync}>
-            {syncing ? 'Syncing…' : '⟳ Sync D&D Beyond'}
-          </button>
-        )}
-      </div>
-      {syncMsg && <div className="sb-sync-msg muted">{syncMsg}</div>}
+      <div className="sb-classline">{s.classLine} · {s.race}{s.alignment ? ` · ${s.alignment}` : ''}</div>
 
       <div className="sb-rollbar">
         <div className="toolbar" style={{ gap: 6 }}>
@@ -139,16 +113,35 @@ export default function StatBlock({ member }) {
       <div className="sb-attacks">
         {(s.attacks || []).map((at, i) => (
           <div className="sb-attack" key={i}>
-            <div className="sb-attack-head">
-              <span className="sb-attack-name">{at.n}</span>
-              <button className="btn small sb-atk-btn" onClick={() => d20(`${at.n} attack`, at.toHit)}>{fmt(at.toHit)} hit</button>
-              <button className="btn small brass sb-atk-btn" onClick={() => dmg(at.n, at.dmg)}>{at.dmg}</button>
-              <span className="muted sb-attack-meta">{at.type}{at.range ? ` · ${at.range}` : ''}</span>
+            <div className="sb-attack-info">
+              <div className="sb-attack-name">{at.n}</div>
+              <div className="sb-attack-sub muted">
+                {[at.type, at.range, at.notes].filter(Boolean).join(' · ')}
+              </div>
             </div>
-            {at.notes && <div className="sb-attack-notes muted">{at.notes}</div>}
+            <button className="btn small sb-atk-btn" title="Roll to hit" onClick={() => d20(`${at.n} attack`, at.toHit)}>{fmt(at.toHit)} hit</button>
+            <button className="btn small brass sb-atk-btn" title="Roll damage" onClick={() => dmg(at.n, at.dmg)}>{at.dmg}</button>
           </div>
         ))}
       </div>
+
+      {s.spells && s.spells.length > 0 && (
+        <>
+          <div className="sb-section-title">Spells</div>
+          <div className="sb-taglist">
+            {s.spells.map((sp, i) => <span key={i} className="sb-tag">{sp}</span>)}
+          </div>
+        </>
+      )}
+
+      {s.features && s.features.length > 0 && (
+        <>
+          <div className="sb-section-title">Features & Traits</div>
+          <div className="sb-taglist">
+            {s.features.map((f, i) => <span key={i} className="sb-tag">{f}</span>)}
+          </div>
+        </>
+      )}
 
       {s.spell && (
         <>
@@ -179,7 +172,7 @@ export default function StatBlock({ member }) {
 
       {canEdit && (
         <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-          Auto-imported from D&D Beyond. A few derived values (HP, AC, fighting-style bonuses) are best-guesses — HP and AC are editable right here, and I can re-sync from D&D Beyond any time.
+          Values imported from D&D Beyond as displayed on the sheet. Everything here is editable — just ask Claude to refresh after you level up or change gear.
         </p>
       )}
     </div>
