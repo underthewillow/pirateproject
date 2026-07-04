@@ -4,10 +4,33 @@ import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
 import Modal from '../common/Modal'
 
-// ---- chart image space (pixels of public/map.jpg) ----
-const W = 1448
-const H = 1086
-const MAP_SRC = assetUrl('map.jpg')
+// ---------------------------------------------------------------------------
+// CHARTS — each chart is one map. Add a new sea later by dropping an image in
+// /public and adding an entry here (with its regions); markers carry a `chart`
+// key so every chart keeps its own set of markings.
+// ---------------------------------------------------------------------------
+const CHARTS = [
+  {
+    key: 'sea_of_swords',
+    name: 'The Sea of Swords',
+    img: 'map.jpg',
+    w: 1448,
+    h: 1086,
+    // A region is revealed (un-fogged) once its key is in settings.charted_regions.
+    // Shapes: ellipse {t:'ellipse',cx,cy,rx,ry} or capsule {t:'capsule',x1,y1,x2,y2,r}.
+    regions: [
+      { key: 'stormwreck', label: 'Stormwreck Isle', shapes: [{ t: 'ellipse', cx: 632, cy: 500, rx: 235, ry: 210 }] },
+      { key: 'neverwinter', label: 'Neverwinter & the Coast', shapes: [{ t: 'ellipse', cx: 1300, cy: 470, rx: 250, ry: 450 }] },
+      { key: 'searoad', label: 'The Charted Sea-Road', shapes: [{ t: 'capsule', x1: 700, y1: 500, x2: 1170, y2: 460, r: 85 }] },
+      { key: 'saltmarsh', label: 'Saltmarsh Approaches', shapes: [{ t: 'ellipse', cx: 175, cy: 220, rx: 235, ry: 235 }] },
+    ],
+  },
+  {
+    key: 'undiscovered',
+    name: 'Undiscovered Seas',
+    placeholder: true,
+  },
+]
 
 // Place types: colour + a little chart glyph.
 const TYPES = {
@@ -20,26 +43,35 @@ const TYPES = {
   island: { c: '#6f6136', g: '⛰', label: 'Isle' },
 }
 
-// Regions — tuned to the painted chart. Used to fog uncharted ground and to
-// tag newly-dropped markers. Fog is drawn over any region NOT yet charted.
-const REGIONS = [
-  { key: 'stormwreck', label: 'Stormwreck Isle', cx: 610, cy: 470, rx: 350, ry: 315 },
-  { key: 'neverwinter', label: 'The Sword Coast', cx: 1255, cy: 470, rx: 265, ry: 520 },
-  { key: 'saltmarsh', label: 'Saltmarsh', cx: 150, cy: 225, rx: 240, ry: 235 },
-]
-
-const regionAt = (x, y) => {
-  for (const r of REGIONS) if (((x - r.cx) / r.rx) ** 2 + ((y - r.cy) / r.ry) ** 2 <= 1) return r.key
+// ---- geometry helpers ----
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1
+  const len2 = dx * dx + dy * dy || 1
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2
+  t = clamp(t, 0, 1)
+  const cx = x1 + t * dx, cy = y1 + t * dy
+  return Math.hypot(px - cx, py - cy)
+}
+function shapeHas(s, x, y) {
+  if (s.t === 'ellipse') return ((x - s.cx) / s.rx) ** 2 + ((y - s.cy) / s.ry) ** 2 <= 1
+  if (s.t === 'capsule') return distToSeg(x, y, s.x1, s.y1, s.x2, s.y2) <= s.r
+  return false
+}
+function regionAt(regions, x, y) {
+  for (const r of regions || []) if ((r.shapes || []).some((s) => shapeHas(s, x, y))) return r.key
   return ''
 }
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
-const clampView = (v) => {
-  const s = clamp(v.s, 1, 6)
-  return { s, tx: clamp(v.tx, W * (1 - s), 0), ty: clamp(v.ty, H * (1 - s), 0) }
+// Render one reveal shape (used inside the fog mask, painted black to cut fog).
+function ShapeEl({ s, fill }) {
+  if (s.t === 'ellipse') return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} fill={fill} />
+  if (s.t === 'capsule') return <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={fill} strokeWidth={s.r * 2} strokeLinecap="round" />
+  return null
 }
 
 export default function MapTab() {
   const { locations, settings, addItem, patchItem, removeItem, setSetting, canEdit } = useData()
+  const [chartKey, setChartKey] = useState('sea_of_swords')
   const [view, setView] = useState({ s: 1, tx: 0, ty: 0 })
   const [openId, setOpenId] = useState(null)
   const [placing, setPlacing] = useState(false)
@@ -53,8 +85,20 @@ export default function MapTab() {
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
 
+  const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
+  const W = chart.w || 1448
+  const H = chart.h || 1086
+  const regions = chart.regions || []
   const charted = Array.isArray(settings?.charted_regions) ? settings.charted_regions : []
   const isCharted = (r) => !r || charted.includes(r)
+
+  // reset the view whenever we switch charts
+  useEffect(() => { setView({ s: 1, tx: 0, ty: 0 }); setPlacing(false) }, [chartKey])
+
+  const clampView = useCallback((v) => {
+    const s = clamp(v.s, 1, 6)
+    return { s, tx: clamp(v.tx, W * (1 - s), 0), ty: clamp(v.ty, H * (1 - s), 0) }
+  }, [W, H])
 
   // ---- screen <-> map coordinate helpers ----
   const svgPoint = useCallback((clientX, clientY) => {
@@ -67,7 +111,6 @@ export default function MapTab() {
     const p = pt.matrixTransform(ctm.inverse())
     return { x: p.x, y: p.y }
   }, [])
-
   const worldFromClient = useCallback((cx, cy) => {
     const vb = svgPoint(cx, cy)
     const v = viewRef.current
@@ -78,27 +121,20 @@ export default function MapTab() {
     const vb = svgPoint(cx, cy)
     setView((v) => {
       const ns = clamp(v.s * f, 1, 6)
-      const wx = (vb.x - v.tx) / v.s
-      const wy = (vb.y - v.ty) / v.s
+      const wx = (vb.x - v.tx) / v.s, wy = (vb.y - v.ty) / v.s
       return clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
     })
-  }, [svgPoint])
+  }, [svgPoint, clampView])
+  const pan = useCallback((dx, dy) => setView((v) => clampView({ ...v, tx: v.tx + dx, ty: v.ty + dy })), [clampView])
 
-  const pan = useCallback((dx, dy) => {
-    setView((v) => clampView({ ...v, tx: v.tx + dx, ty: v.ty + dy }))
-  }, [])
-
-  // wheel zoom (attached manually so we can preventDefault)
+  // wheel zoom (manual listener so we can preventDefault)
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    const onWheel = (e) => {
-      e.preventDefault()
-      zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18)
-    }
+    const onWheel = (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18) }
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
-  }, [zoomAround])
+  }, [zoomAround, chartKey])
 
   // ---- background pan / pinch ----
   const onBgDown = (e) => {
@@ -135,16 +171,17 @@ export default function MapTab() {
     if (tapped && placing && canEdit) addMarkerAt(e.clientX, e.clientY)
   }
 
+  // No window.prompt (the desktop app blocks it) — create the marker, then open
+  // its card so it can be named and described inline.
   const addMarkerAt = async (cx, cy) => {
     const w = worldFromClient(cx, cy)
     if (w.x < 0 || w.x > W || w.y < 0 || w.y > H) { setPlacing(false); return }
-    const name = prompt('Name this place')
-    if (!name) { setPlacing(false); return }
-    await addItem('locations', {
-      name, x: Math.round(w.x), y: Math.round(w.y),
-      discovered: true, type: 'landmark', region: regionAt(w.x, w.y),
-    })
     setPlacing(false)
+    const row = await addItem('locations', {
+      name: 'New marking', description: '', x: Math.round(w.x), y: Math.round(w.y),
+      discovered: true, type: 'landmark', region: regionAt(regions, w.x, w.y), chart: chartKey,
+    })
+    if (row?.id) setOpenId(row.id)
   }
 
   // ---- marker drag / open ----
@@ -157,7 +194,7 @@ export default function MapTab() {
     const d = markerDrag.current
     if (!d) return
     e.stopPropagation()
-    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true
+    if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 8) d.moved = true
     if (d.moved && canEdit) {
       const w = worldFromClient(e.clientX, e.clientY)
       setLocalPos({ id: d.id, x: clamp(w.x, 0, W), y: clamp(w.y, 0, H) })
@@ -172,8 +209,8 @@ export default function MapTab() {
     if (!d) return
     if (d.moved && canEdit) {
       const w = worldFromClient(e.clientX, e.clientY)
-      patchItem('locations', loc.id, { x: Math.round(clamp(w.x, 0, W)), y: Math.round(clamp(w.y, 0, H)) })
-    } else if (loc.discovered) {
+      patchItem('locations', loc.id, { x: Math.round(clamp(w.x, 0, W)), y: Math.round(clamp(w.y, 0, H)), region: regionAt(regions, w.x, w.y) })
+    } else if (loc.discovered || canEdit) {
       setOpenId(loc.id)
     }
   }
@@ -188,8 +225,10 @@ export default function MapTab() {
     setSetting('charted_regions', [...set])
   }
 
-  const visible = locations.filter((l) => isCharted(l.region))
-  const uncharted = REGIONS.filter((r) => !charted.includes(r.key))
+  // markers for this chart; players see charted ones, editors see all
+  const mine = locations.filter((l) => (l.chart || 'sea_of_swords') === chartKey)
+  const visible = mine.filter((l) => canEdit || isCharted(l.region))
+  const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
   const inv = 1 / view.s
 
@@ -197,119 +236,158 @@ export default function MapTab() {
     <div>
       <div className="row-between" style={{ alignItems: 'flex-start' }}>
         <div>
-          <h2 className="section-title">The Chart</h2>
-          <p className="muted" style={{ margin: 0 }}>
-            Drag to sail the chart · scroll or pinch to zoom · tap a charted landfall to read its notes.
-          </p>
+          <h2 className="section-title" style={{ marginBottom: 2 }}>The Chart</h2>
+          <p className="map-tagline">Maps may or may not be drawn to scale.</p>
         </div>
       </div>
 
-      <div className="map-wrap" style={{ marginTop: 12 }}>
-        <svg
-          ref={svgRef}
-          className="map-svg"
-          viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="xMidYMid meet"
-          style={{ cursor: placing ? 'crosshair' : 'grab', touchAction: 'none' }}
-          onPointerDown={onBgDown}
-          onPointerMove={onBgMove}
-          onPointerUp={onBgUp}
-          onPointerCancel={onBgUp}
-        >
-          <defs>
-            <filter id="soft"><feGaussianBlur stdDeviation="30" /></filter>
-            <filter id="fognoise">
-              <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="7" result="n" />
-              <feColorMatrix in="n" type="matrix"
-                values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0" />
-            </filter>
-            <clipPath id="mapclip"><rect x="0" y="0" width={W} height={H} /></clipPath>
-          </defs>
+      {/* chart switcher */}
+      <div className="map-charttabs">
+        {CHARTS.map((c) => (
+          <button key={c.key} className={`map-charttab ${c.key === chartKey ? 'active' : ''}`} onClick={() => setChartKey(c.key)}>
+            {c.name}
+          </button>
+        ))}
+      </div>
 
-          <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
-            {/* painted chart */}
-            <image href={MAP_SRC} xlinkHref={MAP_SRC} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
+      <p className="muted" style={{ margin: '0 0 4px' }}>
+        {chart.placeholder
+          ? 'Waters the crew has not yet sailed.'
+          : 'Drag to sail the chart · scroll or pinch to zoom · tap a charted landfall to read its notes.'}
+      </p>
 
-            {/* fog of war — one cloud over each region not yet charted */}
-            {uncharted.map((r) => (
-              <g key={r.key} pointerEvents="none">
-                <ellipse cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} fill="#202c33" opacity="0.9" filter="url(#soft)" />
-                <ellipse cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} filter="url(#fognoise)" opacity="0.55"
-                  clipPath="url(#mapclip)" />
-                <text x={r.cx} y={r.cy} textAnchor="middle"
-                  style={{ font: 'italic 600 26px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.5">
-                  uncharted
+      {chart.placeholder ? (
+        <div className="map-wrap map-undiscovered">
+          <div className="map-undiscovered-inner">
+            <div className="map-undiscovered-mark">✶</div>
+            <h3>Undiscovered Seas</h3>
+            <p className="muted">Beyond the Sea of Swords the charts run blank. Whatever lies out here — other seas,
+              far ports, monsters in the deep — will be drawn in as the crew sails it.</p>
+            <div className="card" style={{ marginTop: 12, textAlign: 'left' }}>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Rumours &amp; hearsay</div>
+              <Editable as="div" multiline
+                placeholder={canEdit ? 'Note down rumours of what lies beyond…' : 'No rumours recorded yet.'}
+                value={settings?.undiscovered_note || ''}
+                onCommit={(v) => setSetting('undiscovered_note', v)} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="map-wrap">
+          <svg
+            ref={svgRef}
+            className="map-svg"
+            viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ cursor: placing ? 'crosshair' : 'grab', touchAction: 'none' }}
+            onPointerDown={onBgDown}
+            onPointerMove={onBgMove}
+            onPointerUp={onBgUp}
+            onPointerCancel={onBgUp}
+          >
+            <defs>
+              <filter id="soft"><feGaussianBlur stdDeviation="26" /></filter>
+              <filter id="fognoise">
+                <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n" />
+                <feColorMatrix in="n" type="matrix"
+                  values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0" />
+              </filter>
+              <clipPath id="mapclip"><rect x="0" y="0" width={W} height={H} /></clipPath>
+              {/* fog mask: white = fogged, black cut-outs = charted/revealed */}
+              <mask id="fogmask">
+                <rect x="0" y="0" width={W} height={H} fill="#fff" />
+                <g filter="url(#soft)">
+                  {chartedRegions.flatMap((r) => r.shapes.map((s, i) => <ShapeEl key={r.key + i} s={s} fill="#000" />))}
+                </g>
+              </mask>
+            </defs>
+
+            <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
+              {/* painted chart */}
+              <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
+
+              {/* fog of war over everything not yet charted */}
+              <g mask="url(#fogmask)" pointerEvents="none" clipPath="url(#mapclip)">
+                <rect x="0" y="0" width={W} height={H} fill="#1f2b31" opacity="0.92" />
+                <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.5" />
+                <text x={W * 0.70} y={H * 0.86} textAnchor="middle"
+                  style={{ font: 'italic 600 34px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.4">
+                  Here be uncharted waters
+                </text>
+                <text x={W * 0.24} y={H * 0.7} textAnchor="middle"
+                  style={{ font: 'italic 600 26px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.32">
+                  terra incognita
                 </text>
               </g>
-            ))}
 
-            {/* markers — aligned to the painted labels; the map already names them,
-                so these are subtle clickable seals rather than big pins */}
-            {visible.map((l) => {
-              const p = localPos && localPos.id === l.id ? localPos : l
-              const t = TYPES[l.type] || TYPES.landmark
-              const known = !!l.discovered
-              return (
-                <g key={l.id}
-                  className="map-marker"
-                  transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
-                  style={{ cursor: canEdit ? 'grab' : 'pointer' }}
-                  onPointerDown={(e) => onMarkerDown(e, l)}
-                  onPointerMove={onMarkerMove}
-                  onPointerUp={(e) => onMarkerUp(e, l)}
-                  onPointerCancel={(e) => onMarkerUp(e, l)}
-                >
-                  <circle r="26" fill="transparent" />
-                  <circle className="mm-pulse" r="15" fill="none" stroke={known ? t.c : '#6b573a'} strokeWidth="2" />
-                  <circle className="mm-ring" r="13" fill={known ? t.c : '#6b573a'} fillOpacity="0.22"
-                    stroke={known ? t.c : '#6b573a'} strokeWidth="2.5" />
-                  <text className="mm-glyph" x="0" y="5" textAnchor="middle"
-                    style={{ font: '15px serif', fill: known ? t.c : '#6b573a' }}>{known ? t.g : '?'}</text>
-                  <g className="mm-label" transform="translate(0,-24)">
-                    <text x="0" y="0" textAnchor="middle"
-                      style={{ font: '600 16px var(--font-ui, sans-serif)', paintOrder: 'stroke', stroke: '#f7ecd2', strokeWidth: 5, strokeLinejoin: 'round', fill: '#2a1a0c' }}>
-                      {known ? l.name : '???'}
-                    </text>
+              {/* markers */}
+              {visible.map((l) => {
+                const p = localPos && localPos.id === l.id ? localPos : l
+                const t = TYPES[l.type] || TYPES.landmark
+                const known = !!l.discovered
+                const faded = canEdit && !isCharted(l.region) // editor-only preview of un-revealed pins
+                return (
+                  <g key={l.id}
+                    className="map-marker"
+                    transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
+                    style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1 }}
+                    onPointerDown={(e) => onMarkerDown(e, l)}
+                    onPointerMove={onMarkerMove}
+                    onPointerUp={(e) => onMarkerUp(e, l)}
+                    onPointerCancel={(e) => onMarkerUp(e, l)}
+                  >
+                    <circle r="32" fill="#000" opacity="0" pointerEvents="all" />
+                    <circle className="mm-pulse" r="16" fill="none" stroke={known ? t.c : '#6b573a'} strokeWidth="2" />
+                    <circle className="mm-ring" r="14" fill={known ? t.c : '#6b573a'} fillOpacity="0.25"
+                      stroke={known ? t.c : '#6b573a'} strokeWidth="3" />
+                    <text className="mm-glyph" x="0" y="6" textAnchor="middle"
+                      style={{ font: '17px serif', fill: known ? t.c : '#6b573a' }}>{known ? t.g : '?'}</text>
+                    <g className="mm-label" transform="translate(0,-26)">
+                      <text x="0" y="0" textAnchor="middle"
+                        style={{ font: '600 17px var(--font-ui, sans-serif)', paintOrder: 'stroke', stroke: '#f7ecd2', strokeWidth: 5, strokeLinejoin: 'round', fill: '#2a1a0c' }}>
+                        {known ? l.name : '???'}
+                      </text>
+                    </g>
                   </g>
-                </g>
-              )
-            })}
-          </g>
-        </svg>
+                )
+              })}
+            </g>
+          </svg>
 
-        {/* HUD: zoom + tools */}
-        <div className="map-hud map-hud-tl">
-          <button className="map-btn" title="Zoom in" onClick={() => zoomCenter(1.35)}>＋</button>
-          <button className="map-btn" title="Zoom out" onClick={() => zoomCenter(1 / 1.35)}>－</button>
-          <button className="map-btn" title="Reset view" onClick={() => setView({ s: 1, tx: 0, ty: 0 })}>⤢</button>
+          {/* HUD: zoom + tools */}
+          <div className="map-hud map-hud-tl">
+            <button className="map-btn" title="Zoom in" onClick={() => zoomCenter(1.35)}>＋</button>
+            <button className="map-btn" title="Zoom out" onClick={() => zoomCenter(1 / 1.35)}>－</button>
+            <button className="map-btn" title="Reset view" onClick={() => setView({ s: 1, tx: 0, ty: 0 })}>⤢</button>
+            {canEdit && (
+              <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => setPlacing((p) => !p)}>
+                {placing ? '✕ cancel' : '＋ marker'}
+              </button>
+            )}
+          </div>
+
+          {placing && <div className="map-hint">Tap the chart to drop a marker</div>}
+
           {canEdit && (
-            <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => setPlacing((p) => !p)}>
-              {placing ? '✕ cancel' : '＋ marker'}
-            </button>
+            <div className="map-hud map-hud-tr map-regions">
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Charted regions</div>
+              {regions.map((r) => (
+                <label key={r.key} className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                  <input type="checkbox" checked={charted.includes(r.key)} onChange={() => toggleCharted(r.key)} />
+                  {r.label}
+                </label>
+              ))}
+            </div>
           )}
-        </div>
 
-        {placing && <div className="map-hint">Tap the chart to drop a marker</div>}
-
-        {canEdit && (
-          <div className="map-hud map-hud-tr map-regions">
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Charted regions</div>
-            {REGIONS.map((r) => (
-              <label key={r.key} className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                <input type="checkbox" checked={charted.includes(r.key)} onChange={() => toggleCharted(r.key)} />
-                {r.label}
-              </label>
+          {/* legend */}
+          <div className="map-hud map-hud-bl map-legend">
+            {Object.entries(TYPES).map(([k, t]) => (
+              <span key={k} className="map-leg-item"><span className="map-leg-dot" style={{ background: t.c }} />{t.label}</span>
             ))}
           </div>
-        )}
-
-        {/* legend */}
-        <div className="map-hud map-hud-bl map-legend">
-          {Object.entries(TYPES).map(([k, t]) => (
-            <span key={k} className="map-leg-item"><span className="map-leg-dot" style={{ background: t.c }} />{t.label}</span>
-          ))}
         </div>
-      </div>
+      )}
 
       {openLoc && (
         <Modal onClose={() => setOpenId(null)}>
@@ -326,13 +404,13 @@ export default function MapTab() {
               <span className="badge">{(TYPES[openLoc.type] || TYPES.landmark).label}</span>
             )}
             {canEdit ? (
-              <select className="select" style={{ width: 170 }} value={openLoc.region || ''}
+              <select className="select" style={{ width: 190 }} value={openLoc.region || ''}
                 onChange={(e) => patchItem('locations', openLoc.id, { region: e.target.value })}>
                 <option value="">Open sea</option>
-                {REGIONS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                {regions.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
               </select>
             ) : (
-              <span className="badge">{REGIONS.find((r) => r.key === openLoc.region)?.label || 'Open sea'}</span>
+              <span className="badge">{regions.find((r) => r.key === openLoc.region)?.label || 'Open sea'}</span>
             )}
             <label className="flex gap-sm" style={{ alignItems: 'center' }}>
               <input type="checkbox" checked={!!openLoc.discovered} disabled={!canEdit}

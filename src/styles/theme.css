@@ -496,6 +496,35 @@ body {
 .map-leg-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink); }
 .map-leg-dot { width: 11px; height: 11px; border-radius: 3px; border: 1px solid #2a1a0c; display: inline-block; }
 
+/* tagline + chart switcher */
+.map-tagline {
+  margin: 0 0 8px; font-style: italic; font-size: 13px; color: var(--muted, #8a745a);
+  opacity: 0.85;
+}
+.map-charttabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.map-charttab {
+  font-family: var(--font-display, serif); font-size: 14px;
+  padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  color: var(--ink); background: rgba(247,236,210,0.55);
+  border: 1px solid var(--parchment-edge);
+}
+.map-charttab:hover { background: rgba(247,236,210,0.85); }
+.map-charttab.active { background: var(--brass, #b08d3f); color: #2a1a0c; border-color: #6f5a34; font-weight: 600; }
+
+/* undiscovered-seas placeholder chart */
+.map-undiscovered {
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(70,90,100,0.35), transparent 60%),
+    repeating-linear-gradient(60deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 22px),
+    linear-gradient(160deg, #24323a, #1a252b);
+  cursor: default;
+}
+.map-undiscovered-inner { max-width: 460px; text-align: center; padding: 24px; color: #e7dcc2; }
+.map-undiscovered-mark { font-size: 46px; opacity: 0.6; margin-bottom: 6px; }
+.map-undiscovered-inner h3 { font-family: var(--font-display, serif); font-size: 30px; margin: 0 0 8px; color: #f1e6c8; letter-spacing: 1px; }
+.map-undiscovered-inner .muted { color: #c3b593; }
+
 /* markers: subtle seals on the painted chart, name reveals on hover */
 .map-marker { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45)); }
 .map-marker .mm-ring { transition: transform 0.12s ease, fill-opacity 0.12s ease; transform-box: fill-box; transform-origin: center; }
