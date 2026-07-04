@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
 import Modal from '../common/Modal'
 
-// ---- map constants ----
-const W = 2000
-const H = 1400
+// ---- chart image space (pixels of public/map.jpg) ----
+const W = 1448
+const H = 1086
+const MAP_SRC = assetUrl('map.jpg')
 
 // Place types: colour + a little chart glyph.
 const TYPES = {
@@ -18,43 +20,13 @@ const TYPES = {
   island: { c: '#6f6136', g: '⛰', label: 'Isle' },
 }
 
-// Regions used for the fog-of-war reveal and for tagging new markers.
+// Regions — tuned to the painted chart. Used to fog uncharted ground and to
+// tag newly-dropped markers. Fog is drawn over any region NOT yet charted.
 const REGIONS = [
-  { key: 'stormwreck', label: 'Stormwreck Isle', cx: 955, cy: 745, rx: 400, ry: 360, lx: 955, ly: 1055 },
-  { key: 'neverwinter', label: 'The Sword Coast', cx: 1880, cy: 660, rx: 300, ry: 600, lx: 1815, ly: 405 },
-  { key: 'saltmarsh', label: 'Saltmarsh', cx: 300, cy: 335, rx: 320, ry: 300, lx: 300, ly: 500 },
+  { key: 'stormwreck', label: 'Stormwreck Isle', cx: 610, cy: 470, rx: 350, ry: 315 },
+  { key: 'neverwinter', label: 'The Sword Coast', cx: 1255, cy: 470, rx: 265, ry: 520 },
+  { key: 'saltmarsh', label: 'Saltmarsh', cx: 150, cy: 225, rx: 240, ry: 235 },
 ]
-
-// Smooth closed spline (Catmull-Rom -> cubic bezier) so coastlines read as
-// hand-drawn rather than polygonal.
-function smoothClosed(pts) {
-  const n = pts.length
-  let d = `M ${pts[0][0]} ${pts[0][1]} `
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n]
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6
-    d += `C ${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]} `
-  }
-  return d + 'Z'
-}
-
-// Stormwreck Isle — centre of the chart, with a little cove notched into the
-// north-west shoulder where Crackhaven Cove sits (~805,640).
-const STORMWRECK = smoothClosed([
-  [1000, 472], [1128, 508], [1236, 602], [1268, 732], [1206, 882],
-  [1066, 978], [912, 1002], [786, 956], [688, 848], [652, 728],
-  [720, 656], [792, 700], [822, 652], [788, 588], [864, 520], [936, 500],
-])
-// The Sword Coast — eastern mainland, coastline facing the isle.
-const SWORD_COAST = smoothClosed([
-  [2000, 300], [1748, 356], [1662, 512], [1706, 660], [1640, 820],
-  [1724, 984], [2000, 1052],
-])
-// Saltmarsh — cluster of low islands to the north-west (still uncharted).
-const SALTMARSH = smoothClosed([
-  [300, 208], [384, 250], [412, 340], [352, 432], [250, 442], [188, 358], [216, 268],
-])
 
 const regionAt = (x, y) => {
   for (const r of REGIONS) if (((x - r.cx) / r.rx) ** 2 + ((y - r.cy) / r.ry) ** 2 <= 1) return r.key
@@ -217,6 +189,7 @@ export default function MapTab() {
   }
 
   const visible = locations.filter((l) => isCharted(l.region))
+  const uncharted = REGIONS.filter((r) => !charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
   const inv = 1 / view.s
 
@@ -226,9 +199,7 @@ export default function MapTab() {
         <div>
           <h2 className="section-title">The Chart</h2>
           <p className="muted" style={{ margin: 0 }}>
-            {canEdit
-              ? 'Drag to sail the chart · scroll or pinch to zoom · tap a landfall to read its notes.'
-              : 'Drag to sail the chart · scroll or pinch to zoom · tap a charted landfall to read its notes.'}
+            Drag to sail the chart · scroll or pinch to zoom · tap a charted landfall to read its notes.
           </p>
         </div>
       </div>
@@ -246,105 +217,41 @@ export default function MapTab() {
           onPointerCancel={onBgUp}
         >
           <defs>
-            <radialGradient id="sea" cx="48%" cy="42%" r="75%">
-              <stop offset="0%" stopColor="#5c8f92" />
-              <stop offset="55%" stopColor="#3f7276" />
-              <stop offset="100%" stopColor="#2b5457" />
-            </radialGradient>
-            <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#d7c690" />
-              <stop offset="100%" stopColor="#b49a5c" />
-            </linearGradient>
-            <filter id="soft"><feGaussianBlur stdDeviation="26" /></filter>
+            <filter id="soft"><feGaussianBlur stdDeviation="30" /></filter>
             <filter id="fognoise">
-              <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="7" result="n" />
+              <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="7" result="n" />
               <feColorMatrix in="n" type="matrix"
-                values="0 0 0 0 0.12  0 0 0 0 0.17  0 0 0 0 0.19  0 0 0 0.55 0" />
+                values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0" />
             </filter>
-            <mask id="fogmask">
-              <rect x="0" y="0" width={W} height={H} fill="#fff" />
-              {REGIONS.filter((r) => charted.includes(r.key)).map((r) => (
-                <ellipse key={r.key} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} fill="#000" filter="url(#soft)" />
-              ))}
-            </mask>
+            <clipPath id="mapclip"><rect x="0" y="0" width={W} height={H} /></clipPath>
           </defs>
 
-          <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`}>
-            {/* sea */}
-            <rect x="0" y="0" width={W} height={H} fill="url(#sea)" />
+          <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
+            {/* painted chart */}
+            <image href={MAP_SRC} xlinkHref={MAP_SRC} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
-            {/* graticule */}
-            <g stroke="#f3ecd4" strokeOpacity="0.10" strokeWidth="1">
-              {Array.from({ length: 9 }, (_, i) => <line key={'v' + i} x1={(i + 1) * 200} y1="0" x2={(i + 1) * 200} y2={H} />)}
-              {Array.from({ length: 6 }, (_, i) => <line key={'h' + i} x1="0" y1={(i + 1) * 200} x2={W} y2={(i + 1) * 200} />)}
-            </g>
-
-            {/* rhumb lines from a wind-rose point for chart flavour */}
-            <g stroke="#e9dcb6" strokeOpacity="0.12" strokeWidth="1">
-              {Array.from({ length: 16 }, (_, i) => {
-                const a = (i * Math.PI) / 8
-                return <line key={'r' + i} x1="955" y1="745" x2={955 + Math.cos(a) * 1600} y2={745 + Math.sin(a) * 1600} />
-              })}
-            </g>
-
-            {/* landmasses */}
-            <g stroke="#6f5a34" strokeWidth="3" strokeLinejoin="round">
-              <path d={SWORD_COAST} fill="url(#land)" />
-              <path d={STORMWRECK} fill="url(#land)" />
-              <path d={SALTMARSH} fill="url(#land)" />
-              {/* saltmarsh islets */}
-              <circle cx="150" cy="215" r="20" fill="url(#land)" />
-              <circle cx="432" cy="470" r="15" fill="url(#land)" />
-              <circle cx="238" cy="150" r="12" fill="url(#land)" />
-            </g>
-
-            {/* a few hills on Stormwreck for flavour */}
-            <g fill="#8a7442" stroke="#5f4d2a" strokeWidth="2" strokeLinejoin="round" opacity="0.9">
-              <path d="M 980 700 l 34 -46 l 34 46 Z" />
-              <path d="M 1020 712 l 28 -38 l 28 38 Z" />
-              <path d="M 890 812 l 26 -34 l 26 34 Z" />
-            </g>
-
-            {/* region names (only where charted) */}
-            {REGIONS.filter((r) => charted.includes(r.key)).map((r) => (
-              <text key={r.key} x={r.lx} y={r.ly} textAnchor="middle"
-                style={{ font: '600 34px var(--font-display, serif)', fill: '#4a3a1e', letterSpacing: '2px' }}
-                opacity="0.7">{r.label}</text>
+            {/* fog of war — one cloud over each region not yet charted */}
+            {uncharted.map((r) => (
+              <g key={r.key} pointerEvents="none">
+                <ellipse cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} fill="#202c33" opacity="0.9" filter="url(#soft)" />
+                <ellipse cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} filter="url(#fognoise)" opacity="0.55"
+                  clipPath="url(#mapclip)" />
+                <text x={r.cx} y={r.cy} textAnchor="middle"
+                  style={{ font: 'italic 600 26px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.5">
+                  uncharted
+                </text>
+              </g>
             ))}
 
-            {/* fog of war over everything uncharted */}
-            <g mask="url(#fogmask)" pointerEvents="none">
-              <rect x="0" y="0" width={W} height={H} fill="#1f2b31" opacity="0.93" />
-              <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.5" />
-              <text x={W - 60} y={H - 40} textAnchor="end"
-                style={{ font: 'italic 600 40px var(--font-display, serif)', fill: '#cdbd9a' }} opacity="0.35">
-                Here be uncharted waters
-              </text>
-            </g>
-
-            {/* compass rose (SW, over open sea) */}
-            <g transform="translate(180,1210)" opacity="0.85" pointerEvents="none">
-              <circle r="72" fill="none" stroke="#e9dcb6" strokeOpacity="0.5" strokeWidth="2" />
-              <circle r="54" fill="none" stroke="#e9dcb6" strokeOpacity="0.35" strokeWidth="1" />
-              {[0, 1, 2, 3].map((i) => (
-                <g key={i} transform={`rotate(${i * 90})`}>
-                  <path d="M 0 -70 L 12 0 L 0 14 L -12 0 Z" fill="#d9c78e" stroke="#6f5a34" strokeWidth="1" />
-                </g>
-              ))}
-              {[0, 1, 2, 3].map((i) => (
-                <path key={'d' + i} transform={`rotate(${45 + i * 90})`} d="M 0 -46 L 7 0 L 0 8 L -7 0 Z"
-                  fill="#b49a5c" stroke="#6f5a34" strokeWidth="1" />
-              ))}
-              <text y="-78" textAnchor="middle" style={{ font: '700 22px var(--font-display, serif)', fill: '#efe4c4' }}>N</text>
-            </g>
-
-            {/* markers */}
+            {/* markers — aligned to the painted labels; the map already names them,
+                so these are subtle clickable seals rather than big pins */}
             {visible.map((l) => {
               const p = localPos && localPos.id === l.id ? localPos : l
               const t = TYPES[l.type] || TYPES.landmark
               const known = !!l.discovered
               return (
                 <g key={l.id}
+                  className="map-marker"
                   transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
                   style={{ cursor: canEdit ? 'grab' : 'pointer' }}
                   onPointerDown={(e) => onMarkerDown(e, l)}
@@ -352,17 +259,18 @@ export default function MapTab() {
                   onPointerUp={(e) => onMarkerUp(e, l)}
                   onPointerCancel={(e) => onMarkerUp(e, l)}
                 >
-                  <path d="M0 0 C -15 -22 -19 -36 0 -48 C 19 -36 15 -22 0 0 Z"
-                    fill={known ? t.c : '#6b573a'} stroke="#2a1a0c" strokeWidth="2.5"
-                    opacity={known ? 1 : 0.8} />
-                  <circle cx="0" cy="-31" r="9" fill="#f7ecd2" stroke="#2a1a0c" strokeWidth="1" />
-                  <text x="0" y="-26" textAnchor="middle" style={{ font: '13px serif', fill: '#2a1a0c' }}>
-                    {known ? t.g : '?'}
-                  </text>
-                  <text x="0" y="17" textAnchor="middle"
-                    style={{ font: '600 15px var(--font-ui, sans-serif)', paintOrder: 'stroke', stroke: '#f7ecd2', strokeWidth: 4, strokeLinejoin: 'round', fill: '#2a1a0c' }}>
-                    {known ? l.name : '???'}
-                  </text>
+                  <circle r="26" fill="transparent" />
+                  <circle className="mm-pulse" r="15" fill="none" stroke={known ? t.c : '#6b573a'} strokeWidth="2" />
+                  <circle className="mm-ring" r="13" fill={known ? t.c : '#6b573a'} fillOpacity="0.22"
+                    stroke={known ? t.c : '#6b573a'} strokeWidth="2.5" />
+                  <text className="mm-glyph" x="0" y="5" textAnchor="middle"
+                    style={{ font: '15px serif', fill: known ? t.c : '#6b573a' }}>{known ? t.g : '?'}</text>
+                  <g className="mm-label" transform="translate(0,-24)">
+                    <text x="0" y="0" textAnchor="middle"
+                      style={{ font: '600 16px var(--font-ui, sans-serif)', paintOrder: 'stroke', stroke: '#f7ecd2', strokeWidth: 5, strokeLinejoin: 'round', fill: '#2a1a0c' }}>
+                      {known ? l.name : '???'}
+                    </text>
+                  </g>
                 </g>
               )
             })}
