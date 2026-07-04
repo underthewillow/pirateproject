@@ -22,16 +22,44 @@ const showDays = (d) => (d === Infinity ? '∞' : d)
 const uid = () =>
   globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}${Math.random().toString(16).slice(2)}`
 
-// Starter goods offered when the DM first stocks an empty market. Everything is
-// editable afterwards, so these are only a convenient starting point.
-const STARTER_GOODS = [
-  { name: 'Salted Pork', provision: 'food', servings: 1, cost: 2 },
-  { name: 'Hardtack Biscuit', provision: 'food', servings: 1, cost: 1 },
-  { name: 'Crate of Fresh Fruit', provision: 'food', servings: 6, cost: 10 },
-  { name: 'Barrel of Ale', provision: 'drink', servings: 24, cost: 15 },
-  { name: 'Bottle of Rum', provision: 'drink', servings: 4, cost: 8 },
-  { name: 'Cask of Fresh Water', provision: 'drink', servings: 20, cost: 3 },
+// Round gp to the nearest copper so cp/sp priced goods don't show float noise.
+const gp = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+// The standard offering any market carries — D&D 5e PHB "Food, Drink & Lodging"
+// prices (converted to gp; 1 gp = 10 sp = 100 cp). Available at every port.
+const STANDARD_GOODS = [
+  { name: 'Rations (1 day)', provision: 'food', servings: 1, cost: 0.5 },
+  { name: 'Bread, loaf', provision: 'food', servings: 1, cost: 0.02 },
+  { name: 'Meat, chunk', provision: 'food', servings: 1, cost: 0.3 },
+  { name: 'Cheese, hunk', provision: 'food', servings: 1, cost: 0.1 },
+  { name: 'Ale, mug', provision: 'drink', servings: 1, cost: 0.04 },
+  { name: 'Ale, keg (gallon)', provision: 'drink', servings: 8, cost: 0.2 },
+  { name: 'Wine, common (pitcher)', provision: 'drink', servings: 4, cost: 0.2 },
+  { name: 'Wine, fine (bottle)', provision: 'drink', servings: 4, cost: 10 },
 ]
+
+// One-click local flair, keyed by an example port name. Purely a starting point —
+// the DM can rename the port, retune costs, or delete anything afterwards.
+const FLAIR_PACKS = {
+  'Fishing Village': [
+    { name: 'Fresh-Caught Fish', provision: 'food', servings: 1, cost: 0.2 },
+    { name: 'Barrel of Salted Herring', provision: 'food', servings: 20, cost: 8 },
+    { name: 'Basket of Crab & Shellfish', provision: 'food', servings: 6, cost: 3 },
+    { name: 'Local Cider', provision: 'drink', servings: 8, cost: 3 },
+  ],
+  'Tropical Isle': [
+    { name: 'Crate of Exotic Fruit', provision: 'food', servings: 8, cost: 12 },
+    { name: 'Spiced Grilled Meat', provision: 'food', servings: 4, cost: 6 },
+    { name: 'Fresh Coconut', provision: 'drink', servings: 1, cost: 0.5 },
+    { name: 'Cask of Coconut Rum', provision: 'drink', servings: 18, cost: 20 },
+  ],
+  'Frontier Trade Post': [
+    { name: 'Sack of Dried Beans', provision: 'food', servings: 12, cost: 4 },
+    { name: 'Bulk Hardtack', provision: 'food', servings: 20, cost: 6 },
+    { name: 'Wheel of Hard Cheese', provision: 'food', servings: 10, cost: 5 },
+    { name: 'Keg of Cheap Grog', provision: 'drink', servings: 30, cost: 7 },
+  ],
+}
 
 export default function InventoryTab() {
   const { inventory, crew, settings, addItem, patchItem, removeItem, setSetting, canEdit } = useData()
@@ -41,6 +69,7 @@ export default function InventoryTab() {
   const [marketAttempt, setMarketAttempt] = useState('')
   const [marketErr, setMarketErr] = useState(false)
   const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good id
+  const [selectedPort, setSelectedPort] = useState('') // which port we're visiting ('' = standard only)
 
   const cargoNames = settings?.cargo_names || {}
   const CONTAINERS = [
@@ -172,6 +201,12 @@ export default function InventoryTab() {
   // ---- provisions market ----
   const marketItems = Array.isArray(settings?.market_items) ? settings.market_items : []
   const marketPass = settings?.market_passphrase
+  // Ports come from the saved list plus any tagged on goods (covers legacy/flair).
+  const marketPorts = Array.isArray(settings?.market_ports) ? settings.market_ports : []
+  const allPorts = [...new Set([...marketPorts, ...marketItems.map((g) => g.port).filter(Boolean)])]
+  // Standard goods (no port) are sold everywhere; local goods only at their port.
+  const standardGoods = marketItems.filter((g) => !g.port)
+  const localGoods = selectedPort ? marketItems.filter((g) => g.port === selectedPort) : []
 
   const tryOpenMarket = (e) => {
     e.preventDefault()
@@ -182,14 +217,29 @@ export default function InventoryTab() {
   }
 
   const saveGoods = (next) => setSetting('market_items', next)
+  const savePorts = (next) => setSetting('market_ports', next)
   const updateGood = (id, patch) => saveGoods(marketItems.map((g) => (g.id === id ? { ...g, ...patch } : g)))
-  const addGood = () => saveGoods([...marketItems, { id: uid(), name: 'New good', provision: '', servings: 1, cost: 1 }])
+  const addGoodTo = (port) =>
+    saveGoods([...marketItems, { id: uid(), name: 'New good', provision: '', servings: 1, cost: 1, port: port || '' }])
   const removeGood = (id) => saveGoods(marketItems.filter((g) => g.id !== id))
-  const stockStarters = () => saveGoods([...marketItems, ...STARTER_GOODS.map((g) => ({ ...g, id: uid() }))])
+  const stockStandard = () =>
+    saveGoods([...marketItems, ...STANDARD_GOODS.map((g) => ({ ...g, id: uid(), port: '' }))])
+
+  const addPort = () => {
+    const name = prompt('Port name (e.g. Saltmarsh)')?.trim()
+    if (!name) return
+    if (!allPorts.includes(name)) savePorts([...marketPorts, name])
+    setSelectedPort(name)
+  }
+  const addFlairPack = (packName) => {
+    saveGoods([...marketItems, ...FLAIR_PACKS[packName].map((g) => ({ ...g, id: uid(), port: packName }))])
+    if (!allPorts.includes(packName)) savePorts([...marketPorts, packName])
+    setSelectedPort(packName)
+  }
 
   const buyGood = async (g) => {
     const qty = Math.max(1, Number(buyQty[g.id]) || 1)
-    const cost = Math.max(0, Number(g.cost) || 0) * qty
+    const cost = gp(Math.max(0, Number(g.cost) || 0) * qty)
     if (!confirm(`Buy ${qty} × ${g.name} for ${cost} gp? This adds it to the Ship’s Stores and records a market expense in the ledger.`))
       return
     const provision = g.provision || null
@@ -217,6 +267,71 @@ export default function InventoryTab() {
       amount: -cost,
       category: 'Market',
     })
+  }
+
+  const renderGood = (g) => {
+    const kind = KINDS[g.provision]
+    const qty = Math.max(1, Number(buyQty[g.id]) || 1)
+    return (
+      <div className="card" key={g.id}>
+        <div className="row-between">
+          <strong className="grow">
+            {kind ? kind.emoji + ' ' : ''}
+            {canEdit ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} /> : g.name}
+          </strong>
+          <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+            <span className="coin gold" title="cost each">{gp(g.cost)}</span>
+            <span className="muted" style={{ fontSize: 13 }}>gp each</span>
+          </span>
+        </div>
+
+        {canEdit ? (
+          <div className="flex gap-sm" style={{ alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
+            <select
+              className="select"
+              style={{ width: 'auto' }}
+              value={g.provision || ''}
+              onChange={(e) => updateGood(g.id, { provision: e.target.value, servings: e.target.value ? (g.servings || 1) : (g.servings ?? 1) })}
+            >
+              <option value="">🎒 Equipment</option>
+              <option value="food">🍖 Food</option>
+              <option value="drink">🍷 Drink</option>
+            </select>
+            {kind && (
+              <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                <Editable type="number" value={g.servings ?? 1} onCommit={(v) => updateGood(g.id, { servings: v })} /> {kind.each}
+              </span>
+            )}
+            <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+              cost <Editable type="number" value={g.cost ?? 0} onCommit={(v) => updateGood(g.id, { cost: v })} /> gp
+            </span>
+            <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+              at
+              <select className="select" style={{ width: 'auto' }} value={g.port || ''} onChange={(e) => updateGood(g.id, { port: e.target.value })}>
+                <option value="">⚓ Standard</option>
+                {allPorts.map((p) => <option key={p} value={p}>🏝 {p}</option>)}
+              </select>
+            </span>
+            <button className="btn small danger" onClick={() => removeGood(g.id)}>remove</button>
+          </div>
+        ) : (
+          kind && <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{g.servings ?? 1} {kind.unit} each</div>
+        )}
+
+        <div className="flex gap-sm" style={{ alignItems: 'center', marginTop: 8 }}>
+          <span className="muted" style={{ fontSize: 13 }}>qty</span>
+          <input
+            className="input"
+            type="number"
+            min="1"
+            style={{ width: 70 }}
+            value={buyQty[g.id] ?? 1}
+            onChange={(e) => setBuyQty((m) => ({ ...m, [g.id]: e.target.value }))}
+          />
+          <button className="btn brass small" onClick={() => buyGood(g)}>Buy for {gp((Number(g.cost) || 0) * qty)} gp</button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -362,89 +477,73 @@ export default function InventoryTab() {
           </div>
         ) : (
           <div>
-            <div className="row-between" style={{ marginBottom: 8 }}>
-              <span className="eyebrow">Goods for sale</span>
-              <div className="flex gap-sm">
-                {canEdit && <button className="btn small ghost" onClick={addGood}>+ Add good</button>}
-                <button className="btn small ghost" onClick={() => setMarketOpen(false)}>Leave market</button>
-              </div>
+            <div className="row-between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                <span className="eyebrow">Now visiting</span>
+                <select
+                  className="select"
+                  style={{ width: 'auto' }}
+                  value={selectedPort}
+                  onChange={(e) => setSelectedPort(e.target.value)}
+                >
+                  <option value="">⚓ Standard goods only</option>
+                  {allPorts.map((p) => <option key={p} value={p}>🏝 {p}</option>)}
+                </select>
+                {canEdit && <button className="btn small ghost" onClick={addPort}>+ New port</button>}
+              </span>
+              <button className="btn small ghost" onClick={() => setMarketOpen(false)}>Leave market</button>
             </div>
-            <div className="list">
-              {marketItems.length === 0 && (
+
+            {/* Standard catalog — sold at every port */}
+            <div className="row-between">
+              <span className="eyebrow">Standard provisions</span>
+              {canEdit && <button className="btn small ghost" onClick={() => addGoodTo('')}>+ Add</button>}
+            </div>
+            <div className="list" style={{ marginTop: 6 }}>
+              {standardGoods.length === 0 && (
                 <div className="card">
-                  <span className="muted">No goods stocked here yet.</span>
+                  <span className="muted">No standard goods stocked.</span>
                   {canEdit && (
                     <div style={{ marginTop: 8 }}>
-                      <button className="btn small brass" onClick={stockStarters}>Stock starter goods</button>
+                      <button className="btn small brass" onClick={stockStandard}>Stock standard 5e goods</button>
                     </div>
                   )}
                 </div>
               )}
-              {marketItems.map((g) => {
-                const kind = KINDS[g.provision]
-                const qty = Math.max(1, Number(buyQty[g.id]) || 1)
-                return (
-                  <div className="card" key={g.id}>
-                    <div className="row-between">
-                      <strong className="grow">
-                        {kind ? kind.emoji + ' ' : ''}
-                        {canEdit
-                          ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} />
-                          : g.name}
-                      </strong>
-                      <span className="flex gap-sm" style={{ alignItems: 'center' }}>
-                        <span className="coin gold" title="cost each">{Number(g.cost) || 0}</span>
-                        <span className="muted" style={{ fontSize: 13 }}>gp each</span>
-                      </span>
-                    </div>
-
-                    {canEdit ? (
-                      <div className="flex gap-sm" style={{ alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
-                        <select
-                          className="select"
-                          style={{ width: 'auto' }}
-                          value={g.provision || ''}
-                          onChange={(e) => updateGood(g.id, { provision: e.target.value, servings: e.target.value ? (g.servings || 1) : (g.servings ?? 1) })}
-                        >
-                          <option value="">🎒 Equipment</option>
-                          <option value="food">🍖 Food</option>
-                          <option value="drink">🍷 Drink</option>
-                        </select>
-                        {kind && (
-                          <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                            <Editable type="number" value={g.servings ?? 1} onCommit={(v) => updateGood(g.id, { servings: v })} /> {kind.each}
-                          </span>
-                        )}
-                        <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                          cost <Editable type="number" value={g.cost ?? 0} onCommit={(v) => updateGood(g.id, { cost: v })} /> gp
-                        </span>
-                        <button className="btn small danger" onClick={() => removeGood(g.id)}>remove</button>
-                      </div>
-                    ) : (
-                      kind && <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{g.servings ?? 1} {kind.unit} each</div>
-                    )}
-
-                    <div className="flex gap-sm" style={{ alignItems: 'center', marginTop: 8 }}>
-                      <span className="muted" style={{ fontSize: 13 }}>qty</span>
-                      <input
-                        className="input"
-                        type="number"
-                        min="1"
-                        style={{ width: 70 }}
-                        value={buyQty[g.id] ?? 1}
-                        onChange={(e) => setBuyQty((m) => ({ ...m, [g.id]: e.target.value }))}
-                      />
-                      <button className="btn brass small" onClick={() => buyGood(g)}>
-                        Buy for {(Number(g.cost) || 0) * qty} gp
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+              {standardGoods.map(renderGood)}
             </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+
+            {/* Local flair — only at the selected port */}
+            {selectedPort ? (
+              <>
+                <div className="row-between" style={{ marginTop: 16 }}>
+                  <span className="eyebrow">Local flair — {selectedPort}</span>
+                  {canEdit && <button className="btn small ghost" onClick={() => addGoodTo(selectedPort)}>+ Add</button>}
+                </div>
+                <div className="list" style={{ marginTop: 6 }}>
+                  {localGoods.length === 0 && (
+                    <div className="card"><span className="muted">Nothing unique to {selectedPort} yet.</span></div>
+                  )}
+                  {localGoods.map(renderGood)}
+                </div>
+              </>
+            ) : canEdit && (
+              <div style={{ marginTop: 16 }}>
+                <span className="eyebrow">Add local flair to a port</span>
+                <div className="flex gap-sm" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                  {Object.keys(FLAIR_PACKS).map((p) => (
+                    <button key={p} className="btn small ghost" onClick={() => addFlairPack(p)}>+ {p}</button>
+                  ))}
+                </div>
+                <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                  Adds an example port stocked with themed goods. Or use “+ New port”, then add your own.
+                </p>
+              </div>
+            )}
+
+            <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>
               Purchases land in the Ship’s Stores and record the cost as a ledger expense.
-              {canEdit && ' Edit names, types, servings, and costs above to balance the economy.'}
+              {canEdit && ' Edit names, types, servings, costs, and ports above to balance the economy.'}
             </p>
           </div>
         )}
