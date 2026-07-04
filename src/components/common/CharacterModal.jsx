@@ -18,6 +18,9 @@ const ABIL_LOOKUP = new Set([
   'str', 'dex', 'con', 'int', 'wis', 'cha',
   'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma',
 ])
+// Kept in the stats blob but surfaced with their own controls, not the free-form list.
+const RESERVED_STATS = new Set(['rations_per_day', 'drinks_per_day'])
+const DEFAULT_PER_DAY = 1
 
 export default function CharacterModal({ member, onClose }) {
   const { patchItem, removeItem, addRole, removeRole, roles, canEdit } = useData()
@@ -27,8 +30,11 @@ export default function CharacterModal({ member, onClose }) {
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
   const setStats = (next) => patchItem('crew', member.id, { stats: next })
 
-  // Non-ability stats (Race, Class, …) for the general list; abilities get their own grid.
-  const generalStats = Object.entries(stats).filter(([k]) => !ABIL_LOOKUP.has(k.trim().toLowerCase()))
+  // Non-ability stats (Race, Class, …) for the general list; abilities and the
+  // reserved provision fields get their own controls.
+  const generalStats = Object.entries(stats).filter(
+    ([k]) => !ABIL_LOOKUP.has(k.trim().toLowerCase()) && !RESERVED_STATS.has(k.trim().toLowerCase())
+  )
 
   const addStat = () => {
     const name = prompt('Stat name (e.g. AC, HP, Speed, Proficiency)')
@@ -88,6 +94,42 @@ export default function CharacterModal({ member, onClose }) {
           </select>
         ) : (
           <div>{LOCATIONS.find((l) => l.value === member.location)?.label}</div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <label className="eyebrow">Daily provisions</label>
+        {canEdit ? (
+          <div className="flex gap-sm" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+            <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+              🍖
+              <input
+                className="input"
+                type="number"
+                min="0"
+                style={{ width: 70 }}
+                value={stats.rations_per_day ?? DEFAULT_PER_DAY}
+                onChange={(e) => setStats({ ...stats, rations_per_day: e.target.value })}
+              />
+              rations/day
+            </span>
+            <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+              🍷
+              <input
+                className="input"
+                type="number"
+                min="0"
+                style={{ width: 70 }}
+                value={stats.drinks_per_day ?? DEFAULT_PER_DAY}
+                onChange={(e) => setStats({ ...stats, drinks_per_day: e.target.value })}
+              />
+              cups/day
+            </span>
+          </div>
+        ) : (
+          <div className="muted">
+            🍖 {stats.rations_per_day ?? DEFAULT_PER_DAY} rations/day · 🍷 {stats.drinks_per_day ?? DEFAULT_PER_DAY} cups/day
+          </div>
         )}
       </div>
 
