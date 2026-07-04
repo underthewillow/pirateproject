@@ -12,7 +12,8 @@ const ZONES = [
 ]
 
 export default function CrewTab() {
-  const { crew, patchItem, addItem, canEdit } = useData()
+  const { crew, ship, patchItem, addItem, canEdit } = useData()
+  const crewMax = ship?.ship_data?.crewMax ?? 15
   const [openId, setOpenId] = useState(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -50,7 +51,9 @@ export default function CrewTab() {
             return (
               <Droppable key={z.id} id={z.id} data={{ zone: z.id }} className="dropzone">
                 <div className="row-between">
-                  <div className="dropzone-label">{z.title} · {members.length}</div>
+                  <div className="dropzone-label" style={z.id === 'ship' && members.length > crewMax ? { color: 'var(--wax-red)' } : undefined}>
+                    {z.title} · {members.length}{z.id === 'ship' ? ` / ${crewMax}` : ''}
+                  </div>
                 </div>
                 <div className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 10 }}>{z.note}</div>
                 <div className="flex wrap gap-sm">
