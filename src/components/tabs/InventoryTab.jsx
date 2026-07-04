@@ -19,10 +19,28 @@ const dayColor = (d) =>
   d === Infinity ? undefined : d <= 0 ? 'var(--wax-red)' : d < 2 ? '#b5892b' : undefined
 const showDays = (d) => (d === Infinity ? '∞' : d)
 
+const uid = () =>
+  globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}${Math.random().toString(16).slice(2)}`
+
+// Starter goods offered when the DM first stocks an empty market. Everything is
+// editable afterwards, so these are only a convenient starting point.
+const STARTER_GOODS = [
+  { name: 'Salted Pork', provision: 'food', servings: 1, cost: 2 },
+  { name: 'Hardtack Biscuit', provision: 'food', servings: 1, cost: 1 },
+  { name: 'Crate of Fresh Fruit', provision: 'food', servings: 6, cost: 10 },
+  { name: 'Barrel of Ale', provision: 'drink', servings: 24, cost: 15 },
+  { name: 'Bottle of Rum', provision: 'drink', servings: 4, cost: 8 },
+  { name: 'Cask of Fresh Water', provision: 'drink', servings: 20, cost: 3 },
+]
+
 export default function InventoryTab() {
   const { inventory, crew, settings, addItem, patchItem, removeItem, setSetting, canEdit } = useData()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [adding, setAdding] = useState(null) // { container } while the add-item dialog is open
+  const [marketOpen, setMarketOpen] = useState(false)
+  const [marketAttempt, setMarketAttempt] = useState('')
+  const [marketErr, setMarketErr] = useState(false)
+  const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good id
 
   const cargoNames = settings?.cargo_names || {}
   const CONTAINERS = [
@@ -151,6 +169,56 @@ export default function InventoryTab() {
     patchItem('inventory', it.id, patch)
   }
 
+  // ---- provisions market ----
+  const marketItems = Array.isArray(settings?.market_items) ? settings.market_items : []
+  const marketPass = settings?.market_passphrase
+
+  const tryOpenMarket = (e) => {
+    e.preventDefault()
+    // The DM (edit unlocked) always gets in; otherwise the market password gates it.
+    if (canEdit || marketPass == null || String(marketAttempt) === String(marketPass)) {
+      setMarketOpen(true); setMarketErr(false); setMarketAttempt('')
+    } else setMarketErr(true)
+  }
+
+  const saveGoods = (next) => setSetting('market_items', next)
+  const updateGood = (id, patch) => saveGoods(marketItems.map((g) => (g.id === id ? { ...g, ...patch } : g)))
+  const addGood = () => saveGoods([...marketItems, { id: uid(), name: 'New good', provision: '', servings: 1, cost: 1 }])
+  const removeGood = (id) => saveGoods(marketItems.filter((g) => g.id !== id))
+  const stockStarters = () => saveGoods([...marketItems, ...STARTER_GOODS.map((g) => ({ ...g, id: uid() }))])
+
+  const buyGood = async (g) => {
+    const qty = Math.max(1, Number(buyQty[g.id]) || 1)
+    const cost = Math.max(0, Number(g.cost) || 0) * qty
+    if (!confirm(`Buy ${qty} × ${g.name} for ${cost} gp? This adds it to the Ship’s Stores and records a market expense in the ledger.`))
+      return
+    const provision = g.provision || null
+    const servings = provision ? Math.max(1, Number(g.servings) || 1) : 1
+    // Stack onto a matching item already in the Ship's Stores, else add a new one.
+    const existing = inventory.find(
+      (it) =>
+        it.container === 'ship' &&
+        (it.name || '').trim().toLowerCase() === (g.name || '').trim().toLowerCase() &&
+        (it.provision || null) === provision &&
+        perUnit(it) === servings
+    )
+    if (existing) await patchItem('inventory', existing.id, { quantity: (Number(existing.quantity) || 0) + qty })
+    else
+      await addItem('inventory', {
+        name: g.name,
+        container: 'ship',
+        quantity: qty,
+        provision,
+        servings,
+        sort_order: inventory.length + 1,
+      })
+    await addItem('ledger', {
+      description: `Market — ${g.name}${qty > 1 ? ` ×${qty}` : ''}`,
+      amount: -cost,
+      category: 'Market',
+    })
+  }
+
   return (
     <div>
       <h2 className="section-title">Inventory & Cargo</h2>
@@ -260,6 +328,127 @@ export default function InventoryTab() {
           })}
         </div>
       </DndContext>
+
+      {/* Provisions Market */}
+      <div style={{ marginTop: 26 }}>
+        <div className="sb-section-title">🏪 Provisions Market</div>
+        {!marketOpen ? (
+          <div className="card">
+            <p style={{ margin: '0 0 10px' }}>
+              Make port at a town with a market — Saltmarsh, say — to buy food and drink for the voyage.
+            </p>
+            <form className="toolbar" onSubmit={tryOpenMarket}>
+              <input
+                className="input"
+                type="password"
+                style={{ maxWidth: 220 }}
+                placeholder={canEdit ? 'market password (or just enter)' : 'market password'}
+                value={marketAttempt}
+                onChange={(e) => { setMarketAttempt(e.target.value); setMarketErr(false) }}
+              />
+              <button className="btn brass" type="submit">Enter market</button>
+            </form>
+            {marketErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>The market’s closed to you. (Wrong password.)</p>}
+            {canEdit && (
+              <div style={{ marginTop: 12 }}>
+                <label className="eyebrow">Market password (players enter this to shop)</label>
+                <Editable
+                  value={marketPass}
+                  placeholder="no password — open to all"
+                  onCommit={(v) => setSetting('market_passphrase', v)}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div className="row-between" style={{ marginBottom: 8 }}>
+              <span className="eyebrow">Goods for sale</span>
+              <div className="flex gap-sm">
+                {canEdit && <button className="btn small ghost" onClick={addGood}>+ Add good</button>}
+                <button className="btn small ghost" onClick={() => setMarketOpen(false)}>Leave market</button>
+              </div>
+            </div>
+            <div className="list">
+              {marketItems.length === 0 && (
+                <div className="card">
+                  <span className="muted">No goods stocked here yet.</span>
+                  {canEdit && (
+                    <div style={{ marginTop: 8 }}>
+                      <button className="btn small brass" onClick={stockStarters}>Stock starter goods</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {marketItems.map((g) => {
+                const kind = KINDS[g.provision]
+                const qty = Math.max(1, Number(buyQty[g.id]) || 1)
+                return (
+                  <div className="card" key={g.id}>
+                    <div className="row-between">
+                      <strong className="grow">
+                        {kind ? kind.emoji + ' ' : ''}
+                        {canEdit
+                          ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} />
+                          : g.name}
+                      </strong>
+                      <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                        <span className="coin gold" title="cost each">{Number(g.cost) || 0}</span>
+                        <span className="muted" style={{ fontSize: 13 }}>gp each</span>
+                      </span>
+                    </div>
+
+                    {canEdit ? (
+                      <div className="flex gap-sm" style={{ alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
+                        <select
+                          className="select"
+                          style={{ width: 'auto' }}
+                          value={g.provision || ''}
+                          onChange={(e) => updateGood(g.id, { provision: e.target.value, servings: e.target.value ? (g.servings || 1) : (g.servings ?? 1) })}
+                        >
+                          <option value="">🎒 Equipment</option>
+                          <option value="food">🍖 Food</option>
+                          <option value="drink">🍷 Drink</option>
+                        </select>
+                        {kind && (
+                          <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                            <Editable type="number" value={g.servings ?? 1} onCommit={(v) => updateGood(g.id, { servings: v })} /> {kind.each}
+                          </span>
+                        )}
+                        <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                          cost <Editable type="number" value={g.cost ?? 0} onCommit={(v) => updateGood(g.id, { cost: v })} /> gp
+                        </span>
+                        <button className="btn small danger" onClick={() => removeGood(g.id)}>remove</button>
+                      </div>
+                    ) : (
+                      kind && <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{g.servings ?? 1} {kind.unit} each</div>
+                    )}
+
+                    <div className="flex gap-sm" style={{ alignItems: 'center', marginTop: 8 }}>
+                      <span className="muted" style={{ fontSize: 13 }}>qty</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        style={{ width: 70 }}
+                        value={buyQty[g.id] ?? 1}
+                        onChange={(e) => setBuyQty((m) => ({ ...m, [g.id]: e.target.value }))}
+                      />
+                      <button className="btn brass small" onClick={() => buyGood(g)}>
+                        Buy for {(Number(g.cost) || 0) * qty} gp
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Purchases land in the Ship’s Stores and record the cost as a ledger expense.
+              {canEdit && ' Edit names, types, servings, and costs above to balance the economy.'}
+            </p>
+          </div>
+        )}
+      </div>
 
       {adding && (
         <Modal onClose={() => setAdding(null)}>
