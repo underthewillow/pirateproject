@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useData } from '../context/DataContext'
 import { useAppAuth } from '../context/AuthContext'
 import { ALL_ROLES, ROLE_LABELS } from '../config/roles'
@@ -116,11 +116,31 @@ function UserManagementTab() {
 
 function GeneralTab() {
   const { logout, identity } = useAppAuth()
+  const { patchItem } = useData()
+  const [name, setName] = useState(identity?.displayName || '')
+
+  useEffect(() => setName(identity?.displayName || ''), [identity?.displayName])
+
+  const commit = () => {
+    const trimmed = name.trim()
+    if (trimmed && trimmed !== identity?.displayName) {
+      patchItem('appUsers', identity.id, { display_name: trimmed })
+    } else {
+      setName(identity?.displayName || '')
+    }
+  }
+
   return (
     <div>
       <h3 className="section-title">General</h3>
-      <p className="muted">Signed in as <strong>{identity?.displayName}</strong>.</p>
-      <button className="btn ghost" onClick={logout}>Log out</button>
+
+      <label className="eyebrow">Display name</label>
+      <input className="input" value={name} onChange={(e) => setName(e.target.value)} onBlur={commit} />
+      <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+        Shown in the header and to admins in User Management — useful since names from SSO aren't always readable.
+      </p>
+
+      <button className="btn ghost" style={{ marginTop: 16 }} onClick={logout}>Log out</button>
     </div>
   )
 }

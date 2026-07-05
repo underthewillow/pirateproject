@@ -248,12 +248,14 @@ export function DataProvider({ children }) {
   }, [patchItem])
 
   // Create-or-update the app_users row for whoever just logged in (OIDC sub,
-  // or the reserved 'local-admin' breakglass id).
+  // or the reserved 'local-admin' breakglass id). Brand-new users get no
+  // roles at all (read-only "birthright" access) — an admin grants
+  // crew_member/dm/admin/etc. from Settings > User Management.
   const upsertAppUser = useCallback(async (id, fields) => {
     const existing = dataRef.current.appUsers.find((u) => u.id === id)
     const row = await upsertRow('app_users', {
       id,
-      roles: existing?.roles ?? ['crew_member'],
+      roles: existing?.roles ?? [],
       linked_crew_ids: existing?.linked_crew_ids ?? [],
       ...fields,
       last_login_at: new Date().toISOString(),

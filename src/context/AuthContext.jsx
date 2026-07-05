@@ -22,7 +22,14 @@ function toIdentity(row) {
 function InnerAuthProvider({ oidcConfigured, children }) {
   const { loading, appUsers, settings, upsertAppUser, setCanEdit, setIsDM } = useData()
   const oidc = useOidc()
-  const [identity, setIdentity] = useState(null)
+  // Only the id is state — identity itself is derived live from appUsers, so
+  // role/display-name changes (made by an admin, or by the user themselves)
+  // show up immediately instead of requiring a re-login to take effect.
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const identity = useMemo(
+    () => toIdentity(appUsers.find((u) => u.id === currentUserId)),
+    [appUsers, currentUserId]
+  )
   // Becomes true once we've made a definitive first attempt to restore a
   // session (OIDC or breakglass) — until then, App.jsx shows a loading state
   // instead of flashing the login page for someone who's actually logged in.
@@ -49,49 +56,53 @@ function InnerAuthProvider({ oidcConfigured, children }) {
       if (sub && upsertedSub.current !== sub) {
         upsertedSub.current = sub
         // Roles aren't touched here — upsertAppUser defaults brand-new users
-        // to ['crew_member'] and preserves whatever an admin has already
+        // to no roles (read-only) and preserves whatever an admin has already
         // assigned for returning users. Role changes happen only through
-        // Settings > User Management.
+        // Settings > User Management. Same for display_name: only populate it
+        // from the IdP claim on first-ever login — once someone's customized
+        // it (Settings > General), later logins/refreshes must not clobber it.
+        const existing = appUsers.find((u) => u.id === sub)
         upsertAppUser(sub, {
           email: oidc.user.profile?.email ?? null,
-          display_name: oidc.user.profile?.name || oidc.user.profile?.preferred_username || null,
+          display_name: existing?.display_name
+            ?? (oidc.user.profile?.name || oidc.user.profile?.preferred_username || null),
         })
-          .then((row) => setIdentity(toIdentity(row)))
+          .then((row) => setCurrentUserId(row.id))
           .catch((e) => console.error('OIDC login failed', e))
           .finally(() => setAuthReady(true))
         return
       }
     }
 
-    if (!identity && localStorage.getItem(LOCAL_ADMIN_FLAG) === '1') {
+    if (!currentUserId && localStorage.getItem(LOCAL_ADMIN_FLAG) === '1') {
       const row = appUsers.find((u) => u.id === 'local-admin')
-      if (row) setIdentity(toIdentity(row))
+      if (row) setCurrentUserId(row.id)
     }
     setAuthReady(true)
-  }, [loading, oidcConfigured, oidc.isLoading, oidc.isAuthenticated, oidc.user, appUsers, identity, upsertAppUser])
+  }, [loading, oidcConfigured, oidc.isLoading, oidc.isAuthenticated, oidc.user, appUsers, currentUserId, upsertAppUser])
 
   const loginBreakglass = useCallback(async (attempt) => {
     const pass = settings?.local_admin_passphrase
     if (pass != null && String(attempt) !== String(pass)) return false
     const existing = appUsers.find((u) => u.id === 'local-admin')
     const row = await upsertAppUser('local-admin', {
-      display_name: 'admin',
+      display_name: existing?.display_name ?? 'admin',
       roles: existing?.roles ?? ['admin'],
     })
     localStorage.setItem(LOCAL_ADMIN_FLAG, '1')
-    setIdentity(toIdentity(row))
+    setCurrentUserId(row.id)
     return true
   }, [settings, appUsers, upsertAppUser])
 
   const logout = useCallback(async () => {
     // Clear the OIDC session first and wait for it — if we reset
-    // upsertedSub/identity while oidc.isAuthenticated is still (briefly)
+    // upsertedSub/currentUserId while oidc.isAuthenticated is still (briefly)
     // true, the bootstrap effect sees what looks like a fresh login and
     // immediately logs the same user back in before removeUser() finishes.
     if (oidc.isAuthenticated) await oidc.removeUser()
     localStorage.removeItem(LOCAL_ADMIN_FLAG)
     upsertedSub.current = null
-    setIdentity(null)
+    setCurrentUserId(null)
   }, [oidc])
 
   const hasRole = useCallback((role) => !!identity?.roles?.includes(role), [identity])

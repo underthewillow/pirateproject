@@ -65,7 +65,9 @@ the `app_users` table (`supabase/schema/app_users.sql`), holding `roles` (`text[
 `linked_crew_ids` (`uuid[]`, foundation for a future "which character am I playing"
 feature). `src/config/roles.js` defines the fixed role set (`admin`, `dm`, `crew_member`,
 plus the ship-station names) — distinct from the `roles` table, which is ship-station
-*content*. `canEdit`/`isDM` (from `useData()`, consumed the same way everywhere) are now
+*content*. A brand-new login gets **no roles at all** (read-only birthright access,
+`upsertAppUser` in `DataContext.jsx`); an admin grants `crew_member`/`dm`/`admin`/etc. from
+Settings > User Management. `canEdit`/`isDM` (from `useData()`, consumed the same way everywhere) are now
 derived from roles (`admin`/`dm` → both true) via an effect in `AuthContext.jsx`, not a
 standalone unlock action. `App.jsx` hard-gates all tabs behind `authReady && identity`,
 rendering `LoginPage.jsx` otherwise. `SettingsPage.jsx` (opened from the header gear) has

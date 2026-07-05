@@ -18,8 +18,9 @@ brown leather and wood.
 
 Logging in is required to see anything — either with SSO (via a self-hosted
 Authentik instance) or a local breakglass admin password, set from **⚙ Settings
-→ Authentication** (admin only). New logins default to a basic **Crew Member**
-role; an admin promotes people from **⚙ Settings → User Management**.
+→ Authentication** (admin only). New logins start out read-only with no roles
+at all; an admin grants **Crew Member**/**DM**/**Admin**/etc. from **⚙ Settings
+→ User Management**.
 
 ## Running it locally
 
