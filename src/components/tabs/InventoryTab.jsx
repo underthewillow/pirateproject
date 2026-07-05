@@ -297,19 +297,20 @@ export default function InventoryTab() {
         desc: c.desc, detail: c.detail, homebrew: false,
       }))
     const localWares = marketGoods
-      .filter(
-        (g) =>
-          g.merchant_id === currentMerchant.id ||
-          (!g.merchant_id && g.port_id === visitingPortId) ||
-          (!g.merchant_id && !g.port_id)
-      )
+      .filter((g) => g.merchant_id === currentMerchant.id)
       .map((g) => ({
-        key: `hb:${g.id}`, id: g.id, name: g.name, category: 'Local', provision: g.provision || null,
+        key: `hb:${g.id}`, id: g.id, name: g.name,
+        category: g.category || (g.provision ? 'Provisions' : 'Gear'),
+        provision: g.provision || null,
         servings: Math.max(1, Number(g.servings) || 1), base: Number(g.cost) || 0,
         desc: g.description, homebrew: true, port_id: g.port_id, merchant_id: g.merchant_id,
       }))
     return [...localWares, ...catalogWares]
   }, [currentMerchant, marketGoods, visitingPortId])
+
+  // Custom goods not attached to any merchant (e.g. legacy imports) — the DM can
+  // assign them to a merchant or remove them; they're invisible until assigned.
+  const unassignedGoods = marketGoods.filter((g) => !g.merchant_id)
 
   // Category chips reflect what this merchant actually carries.
   const presentCats = [...new Set(goods.map((g) => g.category))]
@@ -481,13 +482,11 @@ export default function InventoryTab() {
     await patchSingleton('funds', { gold: spent.gold, silver: spent.silver, copper: spent.copper })
   }
 
-  // "Sold by" value for a homebrew good's editor.
-  const soldByValue = (g) => (g.merchant_id ? g.merchant_id : g.port_id ? 'port' : 'everywhere')
-  const setSoldBy = (g, value) => {
-    if (value === 'everywhere') updateGood(g.id, { merchant_id: null, port_id: null })
-    else if (value === 'port') updateGood(g.id, { merchant_id: null, port_id: visitingPortId })
-    else updateGood(g.id, { merchant_id: value, port_id: visitingPortId })
-  }
+  // A custom good belongs to one merchant. Moving it re-homes it to another
+  // merchant at this port; "" unassigns it (hidden until reassigned).
+  const soldByValue = (g) => g.merchant_id || ''
+  const setSoldBy = (g, value) =>
+    updateGood(g.id, { merchant_id: value || null, port_id: value ? visitingPortId : g.port_id })
 
   const renderGood = (g) => {
     const kind = KINDS[g.provision]
@@ -502,8 +501,7 @@ export default function InventoryTab() {
             {g.homebrew && isDM
               ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} />
               : g.name}
-            {!g.homebrew && <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· {g.category}</span>}
-            {g.homebrew && <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· local</span>}
+            <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· {g.category}{g.homebrew && isDM ? ' · custom' : ''}</span>
           </strong>
           <span className="flex gap-sm" style={{ alignItems: 'center' }}>
             <Price gp={unit} />
@@ -540,8 +538,7 @@ export default function InventoryTab() {
               sold by
               <select className="select" style={{ width: 'auto' }} value={soldByValue(g)} onChange={(e) => setSoldBy(g, e.target.value)}>
                 {merchantsHere.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                <option value="port">🏝 This port (any merchant)</option>
-                <option value="everywhere">⚓ Everywhere</option>
+                <option value="">— unassigned —</option>
               </select>
             </span>
             <button className="btn small danger" onClick={() => removeItem('marketGoods', g.id)}>remove</button>
@@ -807,6 +804,33 @@ export default function InventoryTab() {
                     {isDM && <button className="btn small danger ghost" onClick={deletePort}>remove port</button>}
                   </div>
                 </div>
+
+                {/* DM: custom goods not attached to any merchant — assign or remove */}
+                {isDM && unassignedGoods.length > 0 && merchantsHere.length > 0 && (
+                  <div className="card" style={{ marginBottom: 12, borderColor: 'var(--wax-red)' }}>
+                    <div className="eyebrow">Unassigned custom goods</div>
+                    <p className="muted" style={{ fontSize: 13, margin: '4px 0 8px' }}>
+                      These aren’t attached to a merchant, so no one can buy them. Assign each to a merchant at this port, or remove it.
+                    </p>
+                    <div className="list">
+                      {unassignedGoods.map((g) => (
+                        <div className="card row-between" key={g.id}>
+                          <strong className="grow">{g.name}</strong>
+                          <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                            <select
+                              className="select" style={{ width: 'auto' }} defaultValue=""
+                              onChange={(e) => e.target.value && updateGood(g.id, { merchant_id: e.target.value, port_id: visitingPortId })}
+                            >
+                              <option value="">assign to…</option>
+                              {merchantsHere.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                            <button className="btn small danger" onClick={() => removeItem('marketGoods', g.id)}>remove</button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Merchant tabs */}
                 <div className="flex gap-sm" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
