@@ -106,7 +106,7 @@ export default function DeskTab() {
           onCommit={(v) => setSetting('sailing_log', v)}
         />
       </div>
-      {!canEdit && <p className="muted" style={{ fontSize: 13 }}>Unlock editing (top of the page) to add to the log.</p>}
+      {!canEdit && <p className="muted" style={{ fontSize: 13 }}>You'll need admin or DM access to add to the log.</p>}
 
       <div className="sb-section-title" style={{ marginTop: 22 }}>Lessons — Sailing &amp; Naval Combat</div>
       <div className="list">

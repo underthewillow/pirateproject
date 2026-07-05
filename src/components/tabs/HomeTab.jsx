@@ -201,7 +201,7 @@ export default function HomeTab({ onNavigate }) {
         </button>
       </div>
 
-      {!canEdit && <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>Unlock the log up top to edit any of these. Tap a card to dive into that section.</p>}
+      {!canEdit && <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>You'll need admin or DM access to edit any of these. Tap a card to dive into that section.</p>}
 
       {openMember && <CharacterModal member={openMember} onClose={() => setOpenId(null)} />}
     </div>

@@ -7,4 +7,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/pirateproject/',
   plugins: [react()],
+  server: {
+    // Vite's dev server blocks unrecognized Host headers by default
+    // (DNS-rebinding protection) — dev-server only, has no effect on
+    // `vite build`/production. Needed so the tunnel domain used to test this
+    // locally (with friends, or as the Authentik OIDC redirect_uri) works.
+    allowedHosts: ['dev.pirate.jakee.me'],
+  },
 })
