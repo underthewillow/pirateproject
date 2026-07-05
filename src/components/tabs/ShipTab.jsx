@@ -44,9 +44,6 @@ export default function ShipTab() {
   const { ship, crew, settings, patchSingleton, addItem, setSetting, canEdit } = useData()
   const roller = useRoller()
   const [mode, setMode] = useState('normal')
-  const [pass, setPass] = useState('')
-  const [yardOpen, setYardOpen] = useState(false)
-  const [passErr, setPassErr] = useState(false)
 
   if (!ship) return <p className="muted">No ship on record.</p>
   const sd = ship.ship_data || {}
@@ -73,12 +70,10 @@ export default function ShipTab() {
   const rollHit = (at) => { const r = rollD20(at.toHit || 0, mode); roller?.show({ label: `${at.name} — to hit`, total: r.total, detail: r.detail, face: r.base, crit: r.crit, fumble: r.fumble }) }
   const rollDmg = (at) => { const r = parseExpr(at.dmg || '1d8'); if (r) roller?.show({ label: `${at.name} — damage`, total: r.total, detail: r.detail }) }
 
-  const shipyardPass = settings?.shipyard_passphrase
-  const tryUnlock = (e) => {
-    e.preventDefault()
-    if (shipyardPass == null || String(pass) === String(shipyardPass)) { setYardOpen(true); setPassErr(false) }
-    else setPassErr(true)
-  }
+  // Admin/DM can always see and manage the shipyard, same as the ports
+  // pattern — the shared setting only gates whether crew see it too.
+  const shipyardUnlocked = !!settings?.shipyard_unlocked
+  const yardOpen = shipyardUnlocked || canEdit
   const buyRepair = async (item) => {
     await patchSingleton('ship', { ship_data: { ...sd, ...item.apply(sd) } })
     await addItem('ledger', { description: `Shipyard — ${item.name}`, amount: -Math.abs(item.cost), category: 'Shipyard' })
@@ -127,7 +122,7 @@ export default function ShipTab() {
         {canEdit && (
           <div style={{ marginTop: 8 }}>
             <label className="eyebrow">Ship image URL</label>
-            <Editable value={ship.image_url} placeholder="paste an image link" onCommit={(v) => patchSingleton('ship', { image_url: v })} />
+            <Editable className="truncate" value={ship.image_url} placeholder="paste an image link" onCommit={(v) => patchSingleton('ship', { image_url: v })} />
           </div>
         )}
         <h2 className="section-title" style={{ marginTop: 14 }}>
@@ -220,20 +215,24 @@ export default function ShipTab() {
         <div className="sb-section-title">Upgrades & Shipyard</div>
         {!yardOpen ? (
           <div className="card">
-            <p style={{ margin: '0 0 10px' }}>⚓ Visit a shipyard to fit repairs and upgrades.</p>
-            <form className="toolbar" onSubmit={tryUnlock}>
-              <input className="input" type="password" style={{ maxWidth: 220 }} placeholder="shipyard password" value={pass} onChange={(e) => { setPass(e.target.value); setPassErr(false) }} />
-              <button className="btn brass" type="submit">Enter shipyard</button>
-            </form>
-            {passErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>That gate stays shut. (Wrong password.)</p>}
+            <p style={{ margin: '0 0 10px' }}>⚓ The shipyard is locked — ask the DM to unlock it.</p>
             {installedList.length > 0 && <p className="muted" style={{ fontSize: 13, marginTop: 10, marginBottom: 0 }}>Fitted: {installedList.map((u) => u.name).join(', ')}.</p>}
           </div>
         ) : (
           <div>
-            <div className="row-between" style={{ marginBottom: 8 }}>
-              <span className="eyebrow">Shipwright's offerings</span>
-              <button className="btn small ghost" onClick={() => setYardOpen(false)}>Leave shipyard</button>
-            </div>
+            {canEdit && (
+              <div className="card row-between" style={{ marginBottom: 12 }}>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {shipyardUnlocked ? '✅ Unlocked — the crew can see this.' : "🔒 Locked for crew — they can't see this yet."}
+                </span>
+                <button
+                  className={`btn small ${shipyardUnlocked ? 'ghost' : 'brass'}`}
+                  onClick={() => setSetting('shipyard_unlocked', !shipyardUnlocked)}
+                >
+                  {shipyardUnlocked ? 'Lock' : 'Unlock for crew'}
+                </button>
+              </div>
+            )}
             <div className="eyebrow" style={{ marginBottom: 6 }}>Repairs</div>
             <div className="list" style={{ marginBottom: 14 }}>
               {REPAIRS.map((u) => (

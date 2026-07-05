@@ -388,6 +388,7 @@ body {
 .gap { gap: 14px; }
 .muted { color: var(--ink-faded); }
 .grow { flex: 1; }
+.truncate { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
 /* ---------- coins ---------- */
 .coin {

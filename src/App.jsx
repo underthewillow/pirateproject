@@ -7,7 +7,7 @@ import SettingsPage from './components/SettingsPage'
 
 export default function App() {
   const { loading, error, ship, canEdit } = useData()
-  const { identity, authReady, logout } = useAppAuth()
+  const { identity, authReady } = useAppAuth()
   const [active, setActive] = useState('home')
   const [view, setView] = useState('app')
 
@@ -40,16 +40,19 @@ export default function App() {
         </div>
         <div className="toolbar">
           <span className="eyebrow" style={{ color: 'var(--brass-light)' }}>{identity.displayName}</span>
-          <button className="btn small" onClick={() => setView(view === 'settings' ? 'app' : 'settings')}>
-            {view === 'settings' ? '🏴‍☠️ Back' : '⚙ Settings'}
+          <button
+            className="btn small"
+            title={view === 'settings' ? 'Back to the Helm' : 'Settings'}
+            onClick={() => setView(view === 'settings' ? 'app' : 'settings')}
+          >
+            {view === 'settings' ? '🏴‍☠️' : '⚙'}
           </button>
-          <button className="btn small ghost" onClick={logout}>Log out</button>
         </div>
       </header>
 
       {view === 'settings' ? (
-        <main className="panel">
-          <SettingsPage onBack={() => setView('app')} />
+        <main className="parchment panel">
+          <SettingsPage />
         </main>
       ) : (
         <>

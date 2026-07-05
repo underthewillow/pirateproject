@@ -145,16 +145,43 @@ function GeneralTab() {
   )
 }
 
+// Each entry is a settings boolean the DM flips to open a feature up to the
+// whole crew. Adding a new one later is just another row here — the tab in
+// each feature (e.g. ShipTab's shipyard) just reads its `key` from settings.
+const DM_UNLOCKS = [
+  { key: 'shipyard_unlocked', label: 'Shipyard', desc: 'Lets the crew fit repairs and upgrades in the Ship tab.' },
+]
+
 function DMSettingsTab() {
+  const { settings, setSetting } = useData()
   return (
     <div>
       <h3 className="section-title">DM Settings</h3>
-      <p className="muted">Foundation for future campaign-unlock tools — nothing here yet.</p>
+      <p className="muted">Unlock features for the whole crew as the campaign progresses.</p>
+      <div className="list" style={{ marginTop: 12 }}>
+        {DM_UNLOCKS.map((u) => {
+          const unlocked = !!settings?.[u.key]
+          return (
+            <div className="card row-between" key={u.key}>
+              <div className="grow">
+                <strong>{u.label}</strong>
+                <div className="muted" style={{ fontSize: 13 }}>{u.desc}</div>
+              </div>
+              <button
+                className={`btn small ${unlocked ? 'ghost' : 'brass'}`}
+                onClick={() => setSetting(u.key, !unlocked)}
+              >
+                {unlocked ? 'Lock' : 'Unlock'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-export default function SettingsPage({ onBack }) {
+export default function SettingsPage() {
   const { hasRole } = useAppAuth()
   const visibleTabs = SUB_TABS.filter((t) => !t.roles || t.roles.some(hasRole))
   const [active, setActive] = useState(visibleTabs[0]?.key || 'general')
@@ -168,10 +195,7 @@ export default function SettingsPage({ onBack }) {
 
   return (
     <div>
-      <div className="row-between" style={{ marginBottom: 12 }}>
-        <h2 className="section-title" style={{ margin: 0 }}>⚙ Settings</h2>
-        <button className="btn ghost" onClick={onBack}>← Back to the Helm</button>
-      </div>
+      <h2 className="section-title" style={{ marginBottom: 12 }}>⚙ Settings</h2>
 
       <nav className="tabbar">
         {visibleTabs.map((t) => (
@@ -185,7 +209,7 @@ export default function SettingsPage({ onBack }) {
         ))}
       </nav>
 
-      <div className="parchment panel" style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
         {content}
       </div>
     </div>

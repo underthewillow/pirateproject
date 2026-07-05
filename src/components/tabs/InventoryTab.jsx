@@ -104,9 +104,6 @@ export default function InventoryTab() {
   } = useData()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [adding, setAdding] = useState(null) // { container } while the add-item dialog is open
-  const [unlockedPorts, setUnlockedPorts] = useState({}) // { [portId]: true } unlocked this session
-  const [portAttempt, setPortAttempt] = useState('')
-  const [portErr, setPortErr] = useState(false)
   const [stockOpen, setStockOpen] = useState(false) // catalog picker modal
   const [stockSearch, setStockSearch] = useState('')
   const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good key
@@ -247,9 +244,10 @@ export default function InventoryTab() {
   const currentPort = ports.find((p) => p.id === visitingPortId) || null
   const portMult = currentPort ? Number(currentPort.price_mult) || 1 : 1
   const portFlair = currentPort?.flair ? PORT_FLAIRS[currentPort.flair] : null
-  // A port with a password is hidden from players until they unlock it this session.
-  // The DM always sees every port.
-  const portLocked = !!(currentPort && currentPort.password && !isDM && !unlockedPorts[currentPort.id])
+  // Locked ports are entirely hidden from crew (filtered out of the port
+  // picker below) — the DM sees and can toggle every port regardless.
+  const portLocked = !!(currentPort && currentPort.locked && !isDM)
+  const visiblePorts = isDM ? ports : ports.filter((p) => !p.locked)
   const legacyGoods = Array.isArray(settings?.market_items) ? settings.market_items : []
 
   // Coin purse (Funds tab), reckoned in copper so we can spend fractional gp.
@@ -265,14 +263,6 @@ export default function InventoryTab() {
   const merchantMult = currentMerchant ? Number(currentMerchant.price_mult) || 1 : 1
   const totalMult = portMult * merchantMult
   const merchantCats = merchantType?.categories || []
-
-  const tryUnlockPort = (e) => {
-    e.preventDefault()
-    if (!currentPort) return
-    if (String(portAttempt) === String(currentPort.password ?? '')) {
-      setUnlockedPorts((u) => ({ ...u, [currentPort.id]: true })); setPortErr(false); setPortAttempt('')
-    } else setPortErr(true)
-  }
 
   // Wares this merchant sells: the items in its `stock` list + attached homebrew.
   const goods = useMemo(() => {
@@ -322,7 +312,7 @@ export default function InventoryTab() {
   const marketError = (e) =>
     alert(`Market action failed. If this is the first time, run supabase/schema/market.sql in the Supabase SQL editor to create the tables.\n\n${e?.message || e}`)
 
-  const selectPort = (id) => { setVisitingPortId(id); setSelectedMerchantId(''); setCatFilter('All'); setPortAttempt(''); setPortErr(false) }
+  const selectPort = (id) => { setVisitingPortId(id); setSelectedMerchantId(''); setCatFilter('All') }
   const selectMerchant = (id) => { setSelectedMerchantId(id); setCatFilter('All') }
 
   const createPort = async (flairKey) => {
@@ -334,6 +324,7 @@ export default function InventoryTab() {
         blurb: flair?.blurb || '',
         price_mult: flair?.price_mult ?? 1,
         sort_order: ports.length + 1,
+        locked: true, // hidden from crew until the DM unlocks it — safer default while it's being stocked
       })
       if (!port?.id) return
       if (flair) {
@@ -688,9 +679,9 @@ export default function InventoryTab() {
                 <span className="eyebrow">Now visiting</span>
                 <select className="select" style={{ width: 'auto' }} value={visitingPortId} onChange={(e) => selectPort(e.target.value)}>
                   <option value="">— choose a port —</option>
-                  {ports.map((p) => (
+                  {visiblePorts.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {(PORT_FLAIRS[p.flair]?.emoji || '🏝')} {p.name}
+                      {(PORT_FLAIRS[p.flair]?.emoji || '🏝')} {p.name}{isDM && p.locked ? ' 🔒' : ''}
                     </option>
                   ))}
                 </select>
@@ -722,26 +713,16 @@ export default function InventoryTab() {
             {!currentPort ? (
               <div className="card">
                 <span className="muted">
-                  {ports.length === 0
+                  {visiblePorts.length === 0
                     ? isDM ? 'No ports yet — make one above to open its markets.' : 'No ports have been established yet.'
                     : 'Choose a port above to browse its merchants.'}
                 </span>
               </div>
             ) : portLocked ? (
               <div className="card">
-                <p style={{ margin: '0 0 10px' }}>
-                  <strong>{portFlair?.emoji || '🏝'} {currentPort.name}</strong> is a private port — enter its password to see its merchants and wares.
+                <p style={{ margin: 0 }}>
+                  <strong>{portFlair?.emoji || '🏝'} {currentPort.name}</strong> is locked — ask the DM to unlock it.
                 </p>
-                <form className="toolbar" onSubmit={tryUnlockPort}>
-                  <input
-                    className="input" type="password" style={{ maxWidth: 220 }}
-                    placeholder="port password"
-                    value={portAttempt}
-                    onChange={(e) => { setPortAttempt(e.target.value); setPortErr(false) }}
-                  />
-                  <button className="btn brass" type="submit">Enter port</button>
-                </form>
-                {portErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>Wrong password — the harbormaster waves you off.</p>}
               </div>
             ) : (
               <>
@@ -757,9 +738,12 @@ export default function InventoryTab() {
                           <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
                             all prices ×<Editable type="number" value={currentPort.price_mult ?? 1} onCommit={(v) => patchItem('ports', currentPort.id, { price_mult: v })} />
                           </span>
-                          <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                            🔒 password <Editable value={currentPort.password} placeholder="open — no password" onCommit={(v) => patchItem('ports', currentPort.id, { password: v })} />
-                          </span>
+                          <button
+                            className={`btn small ${currentPort.locked ? 'brass' : 'ghost'}`}
+                            onClick={() => patchItem('ports', currentPort.id, { locked: !currentPort.locked })}
+                          >
+                            {currentPort.locked ? '🔒 Locked — unlock for crew' : '🔓 Unlocked — lock from crew'}
+                          </button>
                         </div>
                       ) : (
                         <strong style={{ fontSize: 18 }}>{portFlair?.emoji || '🏝'} {currentPort.name}</strong>

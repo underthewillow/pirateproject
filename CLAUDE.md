@@ -74,6 +74,14 @@ rendering `LoginPage.jsx` otherwise. `SettingsPage.jsx` (opened from the header 
 role-gated sub-tabs: Authentication and User Management (admin-only), DM Settings
 (admin/dm), General (everyone).
 
+**DM unlocks.** Features the DM opens up to the whole crew as the campaign progresses are
+plain settings booleans, listed in `DM_UNLOCKS` in `SettingsPage.jsx` (DM Settings tab) —
+each entry is just a `{ key, label, desc }` toggled via `setSetting`; the feature's own tab
+reads that same settings key to decide what to show (e.g. `ShipTab.jsx`'s shipyard reads
+`settings.shipyard_unlocked`, replacing what used to be a standalone `shipyard_passphrase`).
+Adding a new DM-unlockable feature is just another `DM_UNLOCKS` entry plus a settings-key
+check in that feature's own component — no new plumbing.
+
 **Drag-and-drop** uses `@dnd-kit` wrapped by `src/components/common/Dnd.jsx`
 (`Draggable`/`Droppable`) so every tab drags the same way.
 
@@ -138,7 +146,11 @@ logs a `ledger` expense, and deducts the `funds` purse (smallest-coin-first, in
 `InventoryTab.jsx`). One-time SQL for the tables: `supabase/schema/market.sql`.
 
 **Market permissions** use the same `isDM` flag as the rest of the app (role-derived, see
-Authentication & roles above) — market setup (create/edit ports, merchants, prices, port
-passwords) is gated by `isDM`, not a separate unlock. Players don't need `isDM` or
-`canEdit` to shop: *viewing* a port needs that port's `password` (bypassed for `isDM`,
-checked client-side, unrelated to login); *buying* is open once the port is viewable.
+Authentication & roles above) — market setup (create/edit ports, merchants, prices) is
+gated by `isDM`, not a separate unlock. Port visibility to crew is a plain `ports.locked`
+boolean the DM toggles per port (`supabase/schema/ports_locked.sql`) — locked ports are
+filtered out of the port picker entirely for non-DM users, not just content-gated; the DM
+always sees every port and can flip `locked` from the port card. New ports default to
+`locked: true` so a port being stocked isn't visible until the DM is ready to reveal it.
+The old `ports.password` column is unused now (kept, not dropped). Players don't need
+`isDM`/`canEdit` to shop once a port is visible — *buying* is open to anyone.
