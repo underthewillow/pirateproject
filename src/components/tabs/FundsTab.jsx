@@ -21,6 +21,14 @@ export default function FundsTab() {
 
   const purse = funds || { gold: 0, silver: 0, copper: 0 }
 
+  // Fold the ledger's net balance into the gold purse, then drop a balancing
+  // entry so the ledger reads zero again (history is kept, nothing is deleted).
+  const settleLedger = async () => {
+    if (!total) return
+    await patchSingleton('funds', { gold: (Number(purse.gold) || 0) + total })
+    await addItem('ledger', { description: 'Settled to the purse', amount: -total, category: 'Settlement' })
+  }
+
   return (
     <div>
       <h2 className="section-title">Funds & Ledger</h2>
@@ -48,6 +56,16 @@ export default function FundsTab() {
               {total} <span className="muted" style={{ fontSize: 14 }}>gp</span>
             </strong>
           </div>
+          {canEdit && (
+            <>
+              <button className="btn brass small" style={{ width: '100%', marginTop: 10 }} disabled={!total} onClick={settleLedger}>
+                Settle balance into purse
+              </button>
+              <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>
+                Adds the {total} gp balance to your gold and resets the ledger to zero.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Ledger */}
