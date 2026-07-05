@@ -107,8 +107,11 @@ ids), seeded with a random assortment of its type's categories at creation; the 
 merchant types, category mappings) is client config in `src/data/market-config.js`.
 Wares come from a bundled SRD 5.1 catalog (`src/data/srd-equipment.json` + curated
 food/drink in `src/data/catalog.js`; CC-BY-4.0, prices in gp) — no table for the catalog.
-`market_goods` are homebrew extras (pinned to a `merchant_id`, else a `port_id`, else sold
-everywhere). Price = catalog base × port mult × merchant mult. Buying adds to Ship's Stores,
+`market_goods` are homebrew extras (custom items not in the SRD, e.g. "Cask of Coconut
+Rum"), each scoped to one `merchant_id` and shown inline with that merchant's stock — a
+merchant's wares = its `stock` items + its custom goods. Goods with a null `merchant_id`
+(legacy/imports) surface in a DM-only "unassigned goods" box to reassign or delete.
+Price = catalog base × port mult × merchant mult. Buying adds to Ship's Stores,
 logs a `ledger` expense, and deducts the `funds` purse (smallest-coin-first, in
 `InventoryTab.jsx`). One-time SQL for the tables: `supabase/schema/market.sql`.
 
