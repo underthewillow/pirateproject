@@ -22,6 +22,9 @@ const COLLECTIONS = {
   locations: 'map_locations',
   quests: 'quests',
   journal: 'journal_entries',
+  ports: 'ports',
+  merchants: 'merchants',
+  marketGoods: 'market_goods',
 }
 const SINGLETONS = { ship: 'ship', funds: 'funds' }
 const ALL_TABLES = [
@@ -46,11 +49,15 @@ export function DataProvider({ children }) {
     locations: [],
     quests: [],
     journal: [],
+    ports: [],
+    merchants: [],
+    marketGoods: [],
     settings: {},
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [isDM, setIsDM] = useState(false)
   const dataRef = useRef(data)
   dataRef.current = data
 
@@ -68,6 +75,9 @@ export function DataProvider({ children }) {
         locations,
         quests,
         journal,
+        ports,
+        merchants,
+        marketGoods,
         settingsRows,
       ] = await Promise.all([
         fetchAll('ship').then((r) => r[0] ?? null),
@@ -79,11 +89,16 @@ export function DataProvider({ children }) {
         fetchAll('map_locations', 'created_at'),
         fetchAll('quests'),
         fetchAll('journal_entries'),
+        // Market tables may not exist yet (they need a one-time SQL migration);
+        // degrade to empty lists instead of failing the whole app load.
+        fetchAll('ports').catch(() => []),
+        fetchAll('merchants').catch(() => []),
+        fetchAll('market_goods').catch(() => []),
         fetchAll('settings', 'key'),
       ])
       const settings = {}
       for (const row of settingsRows) settings[row.key] = row.value
-      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, settings })
+      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, settings })
       setError(null)
     } catch (e) {
       console.error(e)
@@ -236,6 +251,17 @@ export function DataProvider({ children }) {
   )
   const lock = useCallback(() => setCanEdit(false), [])
 
+  // ---- DM gate (separate, higher tier used for market administration) ----
+  const unlockDM = useCallback((attempt) => {
+    const pass = dataRef.current.settings?.dm_passphrase
+    if (pass == null || String(attempt) === String(pass)) {
+      setIsDM(true)
+      return true
+    }
+    return false
+  }, [])
+  const lockDM = useCallback(() => setIsDM(false), [])
+
   const value = useMemo(
     () => ({
       ...data,
@@ -244,6 +270,9 @@ export function DataProvider({ children }) {
       canEdit,
       unlock,
       lock,
+      isDM,
+      unlockDM,
+      lockDM,
       reload: load,
       addItem,
       patchItem,
@@ -253,7 +282,7 @@ export function DataProvider({ children }) {
       patchSingleton,
       setSetting,
     }),
-    [data, loading, error, canEdit, unlock, lock, load, addItem, patchItem, removeItem, addRole, removeRole, patchSingleton, setSetting]
+    [data, loading, error, canEdit, unlock, lock, isDM, unlockDM, lockDM, load, addItem, patchItem, removeItem, addRole, removeRole, patchSingleton, setSetting]
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -1,9 +1,24 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { useData } from '../../context/DataContext'
 import { Draggable, Droppable } from '../common/Dnd'
 import Editable from '../common/Editable'
 import Modal from '../common/Modal'
+import { CATALOG, CATALOG_BY_INDEX } from '../../data/catalog'
+import { MERCHANT_TYPES, PORT_FLAIRS, MERCHANT_TYPE_KEYS, PORT_FLAIR_KEYS } from '../../data/market-config'
+
+// A fresh merchant is stocked with a random assortment of goods from its type's
+// categories; the DM can then add (from the whole catalog) or remove anything.
+const SEED_SIZE = 8
+const seedStock = (typeKey) => {
+  const t = MERCHANT_TYPES[typeKey]
+  if (!t) return []
+  const pool = CATALOG.filter(
+    (c) => t.categories.includes(c.category) && (!t.provisionOnly || c.category !== 'Provisions' || c.provision === t.provisionOnly)
+  )
+  const shuffled = [...pool].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, Math.min(pool.length, SEED_SIZE)).map((c) => c.index)
+}
 
 // Default daily appetite when a soul has no custom rate set on their sheet.
 const DEFAULT_PER_DAY = 1
@@ -19,57 +34,90 @@ const dayColor = (d) =>
   d === Infinity ? undefined : d <= 0 ? 'var(--wax-red)' : d < 2 ? '#b5892b' : undefined
 const showDays = (d) => (d === Infinity ? '∞' : d)
 
-const uid = () =>
-  globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}${Math.random().toString(16).slice(2)}`
-
 // Round gp to the nearest copper so cp/sp priced goods don't show float noise.
 const gp = (n) => Math.round((Number(n) || 0) * 100) / 100
 
-// The standard offering any market carries — D&D 5e PHB "Food, Drink & Lodging"
-// prices (converted to gp; 1 gp = 10 sp = 100 cp). Available at every port.
-const STANDARD_GOODS = [
-  { name: 'Rations (1 day)', provision: 'food', servings: 1, cost: 0.5 },
-  { name: 'Bread, loaf', provision: 'food', servings: 1, cost: 0.02 },
-  { name: 'Meat, chunk', provision: 'food', servings: 1, cost: 0.3 },
-  { name: 'Cheese, hunk', provision: 'food', servings: 1, cost: 0.1 },
-  { name: 'Ale, mug', provision: 'drink', servings: 1, cost: 0.04 },
-  { name: 'Ale, keg (gallon)', provision: 'drink', servings: 8, cost: 0.2 },
-  { name: 'Wine, common (pitcher)', provision: 'drink', servings: 4, cost: 0.2 },
-  { name: 'Wine, fine (bottle)', provision: 'drink', servings: 4, cost: 10 },
-]
+// Coins as a compact string, e.g. "12g 3s 5c" (1 gp = 10 sp = 100 cp).
+const coinStr = (p) => `${Number(p?.gold) || 0}g ${Number(p?.silver) || 0}s ${Number(p?.copper) || 0}c`
 
-// One-click local flair, keyed by an example port name. Purely a starting point —
-// the DM can rename the port, retune costs, or delete anything afterwards.
-const FLAIR_PACKS = {
-  'Fishing Village': [
-    { name: 'Fresh-Caught Fish', provision: 'food', servings: 1, cost: 0.2 },
-    { name: 'Barrel of Salted Herring', provision: 'food', servings: 20, cost: 8 },
-    { name: 'Basket of Crab & Shellfish', provision: 'food', servings: 6, cost: 3 },
-    { name: 'Local Cider', provision: 'drink', servings: 8, cost: 3 },
-  ],
-  'Tropical Isle': [
-    { name: 'Crate of Exotic Fruit', provision: 'food', servings: 8, cost: 12 },
-    { name: 'Spiced Grilled Meat', provision: 'food', servings: 4, cost: 6 },
-    { name: 'Fresh Coconut', provision: 'drink', servings: 1, cost: 0.5 },
-    { name: 'Cask of Coconut Rum', provision: 'drink', servings: 18, cost: 20 },
-  ],
-  'Frontier Trade Post': [
-    { name: 'Sack of Dried Beans', provision: 'food', servings: 12, cost: 4 },
-    { name: 'Bulk Hardtack', provision: 'food', servings: 20, cost: 6 },
-    { name: 'Wheel of Hard Cheese', provision: 'food', servings: 10, cost: 5 },
-    { name: 'Keg of Cheap Grog', provision: 'drink', servings: 30, cost: 7 },
-  ],
+// Split a gp amount into whole coins { gold, silver, copper }, nearest copper.
+const toCoins = (gpVal) => {
+  let cp = Math.round((Number(gpVal) || 0) * 100)
+  const gold = Math.floor(cp / 100); cp -= gold * 100
+  const silver = Math.floor(cp / 10); cp -= silver * 10
+  return { gold, silver, copper: cp }
+}
+
+// A gp amount as a text coin string, e.g. 0.02 → "2c", 1.5 → "1g 5s".
+// Used where JSX can't go (confirm/alert dialogs).
+const priceStr = (gpVal) => {
+  const { gold, silver, copper } = toCoins(gpVal)
+  const parts = []
+  if (gold) parts.push(`${gold}g`)
+  if (silver) parts.push(`${silver}s`)
+  if (copper) parts.push(`${copper}c`)
+  return parts.join(' ') || 'free'
+}
+
+// A gp amount rendered as mini coin discs — each denomination's count overlaid
+// on a gold/silver/copper coin (e.g. 0.02 gp → a single copper coin marked "2").
+function Price({ gp: gpVal }) {
+  const { gold, silver, copper } = toCoins(gpVal)
+  const coins = [['gold', gold], ['silver', silver], ['copper', copper]].filter(([, n]) => n > 0)
+  if (!coins.length) return <span className="muted">free</span>
+  return (
+    <span className="price-coins">
+      {coins.map(([kind, n]) => (
+        <span key={kind} className={`coin tiny ${kind}`} title={kind}>{n}</span>
+      ))}
+    </span>
+  )
+}
+
+// Spend `costCopper` from a { gold, silver, copper } purse, paying the smallest
+// coins first and breaking one larger coin into change only when a smaller
+// denomination runs short. Denominations are preserved — we never consolidate
+// silver/copper upward into gold, so the crew keeps a real mix of currency.
+const spendCoins = (purse, costCopper) => {
+  let g = Number(purse?.gold) || 0
+  let s = Number(purse?.silver) || 0
+  let c = Number(purse?.copper) || 0
+  let need = costCopper
+
+  const takeC = Math.min(c, need); c -= takeC; need -= takeC
+  if (need > 0) {
+    const takeS = Math.min(s, Math.floor(need / 10)); s -= takeS; need -= takeS * 10
+    if (need > 0 && s > 0) { s -= 1; c += 10; const t = Math.min(c, need); c -= t; need -= t }
+  }
+  if (need > 0) {
+    const takeG = Math.min(g, Math.floor(need / 100)); g -= takeG; need -= takeG * 100
+    if (need > 0 && g > 0) { g -= 1; const change = 100 - need; need = 0; s += Math.floor(change / 10); c += change % 10 }
+  }
+  return { gold: g, silver: s, copper: c, short: need }
 }
 
 export default function InventoryTab() {
-  const { inventory, crew, settings, addItem, patchItem, removeItem, setSetting, canEdit } = useData()
+  const {
+    inventory, crew, settings, ports, merchants, marketGoods, funds,
+    addItem, patchItem, removeItem, patchSingleton, setSetting, canEdit,
+    isDM, unlockDM, lockDM,
+  } = useData()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [adding, setAdding] = useState(null) // { container } while the add-item dialog is open
-  const [marketOpen, setMarketOpen] = useState(false)
-  const [marketAttempt, setMarketAttempt] = useState('')
-  const [marketErr, setMarketErr] = useState(false)
-  const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good id
-  const [selectedPort, setSelectedPort] = useState('') // which port we're visiting ('' = standard only)
+  const [unlockedPorts, setUnlockedPorts] = useState({}) // { [portId]: true } unlocked this session
+  const [portAttempt, setPortAttempt] = useState('')
+  const [portErr, setPortErr] = useState(false)
+  const [dmUnlockOpen, setDmUnlockOpen] = useState(false)
+  const [dmAttempt, setDmAttempt] = useState('')
+  const [dmErr, setDmErr] = useState(false)
+  const [stockOpen, setStockOpen] = useState(false) // catalog picker modal
+  const [stockSearch, setStockSearch] = useState('')
+  const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good key
+  const [visitingPortId, setVisitingPortId] = useState('') // which port we're at ('' = none)
+  const [selectedMerchantId, setSelectedMerchantId] = useState('')
+  const [search, setSearch] = useState('')
+  const [catFilter, setCatFilter] = useState('All')
+  const [newMerchantType, setNewMerchantType] = useState('general')
 
   const cargoNames = settings?.cargo_names || {}
   const CONTAINERS = [
@@ -199,52 +247,218 @@ export default function InventoryTab() {
   }
 
   // ---- provisions market ----
-  const marketItems = Array.isArray(settings?.market_items) ? settings.market_items : []
-  const marketPass = settings?.market_passphrase
-  // Ports come from the saved list plus any tagged on goods (covers legacy/flair).
-  const marketPorts = Array.isArray(settings?.market_ports) ? settings.market_ports : []
-  const allPorts = [...new Set([...marketPorts, ...marketItems.map((g) => g.port).filter(Boolean)])]
-  // Standard goods (no port) are sold everywhere; local goods only at their port.
-  const standardGoods = marketItems.filter((g) => !g.port)
-  const localGoods = selectedPort ? marketItems.filter((g) => g.port === selectedPort) : []
+  const currentPort = ports.find((p) => p.id === visitingPortId) || null
+  const portMult = currentPort ? Number(currentPort.price_mult) || 1 : 1
+  const portFlair = currentPort?.flair ? PORT_FLAIRS[currentPort.flair] : null
+  // A port with a password is hidden from players until they unlock it this session.
+  // The DM always sees every port.
+  const portLocked = !!(currentPort && currentPort.password && !isDM && !unlockedPorts[currentPort.id])
+  const dmPass = settings?.dm_passphrase
+  const legacyGoods = Array.isArray(settings?.market_items) ? settings.market_items : []
 
-  const tryOpenMarket = (e) => {
+  // Coin purse (Funds tab), reckoned in copper so we can spend fractional gp.
+  const purse = funds || { gold: 0, silver: 0, copper: 0 }
+  const purseCopper =
+    (Number(purse.gold) || 0) * 100 + (Number(purse.silver) || 0) * 10 + (Number(purse.copper) || 0)
+
+  const merchantsHere = merchants
+    .filter((m) => m.port_id === visitingPortId)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const currentMerchant = merchantsHere.find((m) => m.id === selectedMerchantId) || merchantsHere[0] || null
+  const merchantType = currentMerchant ? MERCHANT_TYPES[currentMerchant.type] : null
+  const merchantMult = currentMerchant ? Number(currentMerchant.price_mult) || 1 : 1
+  const totalMult = portMult * merchantMult
+  const merchantCats = merchantType?.categories || []
+
+  const tryUnlockPort = (e) => {
     e.preventDefault()
-    // The DM (edit unlocked) always gets in; otherwise the market password gates it.
-    if (canEdit || marketPass == null || String(marketAttempt) === String(marketPass)) {
-      setMarketOpen(true); setMarketErr(false); setMarketAttempt('')
-    } else setMarketErr(true)
+    if (!currentPort) return
+    if (String(portAttempt) === String(currentPort.password ?? '')) {
+      setUnlockedPorts((u) => ({ ...u, [currentPort.id]: true })); setPortErr(false); setPortAttempt('')
+    } else setPortErr(true)
   }
 
-  const saveGoods = (next) => setSetting('market_items', next)
-  const savePorts = (next) => setSetting('market_ports', next)
-  const updateGood = (id, patch) => saveGoods(marketItems.map((g) => (g.id === id ? { ...g, ...patch } : g)))
-  const addGoodTo = (port) =>
-    saveGoods([...marketItems, { id: uid(), name: 'New good', provision: '', servings: 1, cost: 1, port: port || '' }])
-  const removeGood = (id) => saveGoods(marketItems.filter((g) => g.id !== id))
-  const stockStandard = () =>
-    saveGoods([...marketItems, ...STANDARD_GOODS.map((g) => ({ ...g, id: uid(), port: '' }))])
-
-  const addPort = () => {
-    const name = prompt('Port name (e.g. Saltmarsh)')?.trim()
-    if (!name) return
-    if (!allPorts.includes(name)) savePorts([...marketPorts, name])
-    setSelectedPort(name)
+  const tryUnlockDM = (e) => {
+    e.preventDefault()
+    if (unlockDM(dmAttempt)) { setDmErr(false); setDmAttempt(''); setDmUnlockOpen(false) }
+    else setDmErr(true)
   }
-  const addFlairPack = (packName) => {
-    saveGoods([...marketItems, ...FLAIR_PACKS[packName].map((g) => ({ ...g, id: uid(), port: packName }))])
-    if (!allPorts.includes(packName)) savePorts([...marketPorts, packName])
-    setSelectedPort(packName)
+
+  // Wares this merchant sells: the items in its `stock` list + attached homebrew.
+  const goods = useMemo(() => {
+    if (!currentMerchant) return []
+    const stock = Array.isArray(currentMerchant.stock) ? currentMerchant.stock : []
+    const catalogWares = stock
+      .map((idx) => CATALOG_BY_INDEX[idx])
+      .filter(Boolean)
+      .map((c) => ({
+        key: `cat:${c.index}`, catalogIndex: c.index, name: c.name, category: c.category,
+        provision: c.provision || null, servings: c.servings || 1, base: c.cost_gp,
+        desc: c.desc, detail: c.detail, homebrew: false,
+      }))
+    const localWares = marketGoods
+      .filter(
+        (g) =>
+          g.merchant_id === currentMerchant.id ||
+          (!g.merchant_id && g.port_id === visitingPortId) ||
+          (!g.merchant_id && !g.port_id)
+      )
+      .map((g) => ({
+        key: `hb:${g.id}`, id: g.id, name: g.name, category: 'Local', provision: g.provision || null,
+        servings: Math.max(1, Number(g.servings) || 1), base: Number(g.cost) || 0,
+        desc: g.description, homebrew: true, port_id: g.port_id, merchant_id: g.merchant_id,
+      }))
+    return [...localWares, ...catalogWares]
+  }, [currentMerchant, marketGoods, visitingPortId])
+
+  // Category chips reflect what this merchant actually carries.
+  const presentCats = [...new Set(goods.map((g) => g.category))]
+  const catChips = ['All', ...presentCats]
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return goods.filter((g) => {
+      if (catFilter !== 'All' && g.category !== catFilter) return false
+      if (q && !`${g.name} ${g.desc || ''}`.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [goods, search, catFilter])
+
+  const DISPLAY_CAP = 80
+  const shown = filtered.slice(0, DISPLAY_CAP)
+
+  // ---- market editing (DM) ----
+  const marketError = (e) =>
+    alert(`Market action failed. If this is the first time, run supabase/schema/market.sql in the Supabase SQL editor to create the tables.\n\n${e?.message || e}`)
+
+  const selectPort = (id) => { setVisitingPortId(id); setSelectedMerchantId(''); setCatFilter('All'); setPortAttempt(''); setPortErr(false) }
+  const selectMerchant = (id) => { setSelectedMerchantId(id); setCatFilter('All') }
+
+  const createPort = async (flairKey) => {
+    try {
+      const flair = flairKey ? PORT_FLAIRS[flairKey] : null
+      const port = await addItem('ports', {
+        name: flair?.label || 'New Port',
+        flair: flairKey || null,
+        blurb: flair?.blurb || '',
+        price_mult: flair?.price_mult ?? 1,
+        sort_order: ports.length + 1,
+      })
+      if (!port?.id) return
+      if (flair) {
+        for (const [i, typeKey] of flair.merchants.entries()) {
+          const t = MERCHANT_TYPES[typeKey]
+          await addItem('merchants', {
+            port_id: port.id, name: t.label, type: typeKey, blurb: '',
+            price_mult: t.mult ?? 1, stock: seedStock(typeKey), sort_order: i + 1,
+          })
+        }
+      }
+      setVisitingPortId(port.id); setSelectedMerchantId(''); setCatFilter('All')
+    } catch (e) { marketError(e) }
+  }
+
+  const deletePort = async () => {
+    if (!currentPort) return
+    if (!confirm(`Remove the port “${currentPort.name}”? Its merchants and local goods go with it.`)) return
+    try { await removeItem('ports', currentPort.id); selectPort('') } catch (e) { marketError(e) }
+  }
+
+  const addMerchant = async () => {
+    if (!visitingPortId) return
+    const t = MERCHANT_TYPES[newMerchantType]
+    try {
+      const m = await addItem('merchants', {
+        port_id: visitingPortId, name: t.label, type: newMerchantType, blurb: '',
+        price_mult: t.mult ?? 1, stock: seedStock(newMerchantType), sort_order: merchantsHere.length + 1,
+      })
+      if (m?.id) selectMerchant(m.id)
+    } catch (e) { marketError(e) }
+  }
+
+  const deleteMerchant = async (m) => {
+    if (!confirm(`Remove ${m.name} from this port? Its local goods go with it.`)) return
+    try { await removeItem('merchants', m.id); setSelectedMerchantId('') } catch (e) { marketError(e) }
+  }
+
+  const addLocalGood = () =>
+    addItem('marketGoods', {
+      name: 'New custom good', category: merchantCats[0] || 'Provisions', provision: null,
+      servings: 1, cost: 1, port_id: visitingPortId || null, merchant_id: currentMerchant?.id || null,
+      sort_order: marketGoods.length + 1,
+    }).catch(marketError)
+  const updateGood = (id, patch) => patchItem('marketGoods', id, patch)
+
+  // Add/remove catalog items from the current merchant's stock list.
+  const stockOf = (m) => (Array.isArray(m?.stock) ? m.stock : [])
+  const addToStock = (idx) => {
+    if (!currentMerchant) return
+    const stock = stockOf(currentMerchant)
+    if (stock.includes(idx)) return
+    patchItem('merchants', currentMerchant.id, { stock: [...stock, idx] })
+  }
+  const removeFromStock = (idx) => {
+    if (!currentMerchant) return
+    patchItem('merchants', currentMerchant.id, { stock: stockOf(currentMerchant).filter((i) => i !== idx) })
+  }
+
+  // Catalog picker (add anything from the database), related categories first.
+  const stockList = useMemo(() => {
+    const q = stockSearch.trim().toLowerCase()
+    const cats = merchantType?.categories || []
+    return [...CATALOG]
+      .filter((c) => !q || `${c.name} ${c.desc || ''}`.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const ar = cats.includes(a.category) ? 0 : 1
+        const br = cats.includes(b.category) ? 0 : 1
+        if (ar !== br) return ar - br
+        return a.name.localeCompare(b.name)
+      })
+  }, [stockSearch, merchantType])
+  const stockShown = stockList.slice(0, 60)
+
+  const importLegacy = async () => {
+    if (!legacyGoods.length) return
+    if (!confirm(`Import ${legacyGoods.length} good(s) from the old market? A port (with a Provisioner) is made for each old port name.`)) return
+    try {
+      const portNames = [...new Set(legacyGoods.map((g) => g.port).filter(Boolean))]
+      const nameToMerchant = {}
+      for (const [i, name] of portNames.entries()) {
+        const port = await addItem('ports', { name, flair: null, blurb: '', price_mult: 1, sort_order: ports.length + i + 1 })
+        const m = await addItem('merchants', { port_id: port.id, name: 'Provisioner', type: 'provisioner', blurb: '', price_mult: 1, sort_order: 1 })
+        nameToMerchant[name] = m.id
+      }
+      for (const [i, g] of legacyGoods.entries()) {
+        await addItem('marketGoods', {
+          name: g.name || 'Good',
+          category: g.provision ? 'Provisions' : 'Local',
+          provision: g.provision || null,
+          servings: Math.max(1, Number(g.servings) || 1),
+          cost: Number(g.cost) || 0,
+          port_id: null,
+          merchant_id: g.port ? nameToMerchant[g.port] || null : null,
+          sort_order: marketGoods.length + i + 1,
+        })
+      }
+      await setSetting('market_items', null)
+      alert('Old market imported. Retune ports, merchants, and prices as you like.')
+    } catch (e) { marketError(e) }
   }
 
   const buyGood = async (g) => {
-    const qty = Math.max(1, Number(buyQty[g.id]) || 1)
-    const cost = gp(Math.max(0, Number(g.cost) || 0) * qty)
-    if (!confirm(`Buy ${qty} × ${g.name} for ${cost} gp? This adds it to the Ship’s Stores and records a market expense in the ledger.`))
+    const qty = Math.max(1, Number(buyQty[g.key]) || 1)
+    const unit = gp(Math.max(0, g.base) * totalMult)
+    const cost = gp(unit * qty)
+    const where = `${currentMerchant ? ` from ${currentMerchant.name}` : ''}${currentPort ? ` at ${currentPort.name}` : ''}`
+    const costCopper = Math.round(cost * 100)
+    if (costCopper > purseCopper) {
+      alert(`Not enough coin. That costs ${priceStr(cost)}, but the purse holds only ${coinStr(purse)}.`)
+      return
+    }
+    if (!confirm(`Buy ${qty} × ${g.name} for ${priceStr(cost)}${where}? It lands in the Ship’s Stores, records a market expense in the ledger, and is paid from the purse.`))
       return
     const provision = g.provision || null
     const servings = provision ? Math.max(1, Number(g.servings) || 1) : 1
-    // Stack onto a matching item already in the Ship's Stores, else add a new one.
     const existing = inventory.find(
       (it) =>
         it.container === 'ship' &&
@@ -255,43 +469,60 @@ export default function InventoryTab() {
     if (existing) await patchItem('inventory', existing.id, { quantity: (Number(existing.quantity) || 0) + qty })
     else
       await addItem('inventory', {
-        name: g.name,
-        container: 'ship',
-        quantity: qty,
-        provision,
-        servings,
+        name: g.name, container: 'ship', quantity: qty, provision, servings,
         sort_order: inventory.length + 1,
       })
     await addItem('ledger', {
-      description: `Market — ${g.name}${qty > 1 ? ` ×${qty}` : ''}`,
+      description: `Market — ${g.name}${qty > 1 ? ` ×${qty}` : ''}${where}`,
       amount: -cost,
       category: 'Market',
     })
+    const spent = spendCoins(purse, costCopper)
+    await patchSingleton('funds', { gold: spent.gold, silver: spent.silver, copper: spent.copper })
+  }
+
+  // "Sold by" value for a homebrew good's editor.
+  const soldByValue = (g) => (g.merchant_id ? g.merchant_id : g.port_id ? 'port' : 'everywhere')
+  const setSoldBy = (g, value) => {
+    if (value === 'everywhere') updateGood(g.id, { merchant_id: null, port_id: null })
+    else if (value === 'port') updateGood(g.id, { merchant_id: null, port_id: visitingPortId })
+    else updateGood(g.id, { merchant_id: value, port_id: visitingPortId })
   }
 
   const renderGood = (g) => {
     const kind = KINDS[g.provision]
-    const qty = Math.max(1, Number(buyQty[g.id]) || 1)
+    const qty = Math.max(1, Number(buyQty[g.key]) || 1)
+    const unit = gp(g.base * totalMult)
+    const perServing = g.provision ? gp(unit / Math.max(1, g.servings)) : null
     return (
-      <div className="card" key={g.id}>
+      <div className="card" key={g.key}>
         <div className="row-between">
           <strong className="grow">
             {kind ? kind.emoji + ' ' : ''}
-            {canEdit ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} /> : g.name}
+            {g.homebrew && isDM
+              ? <Editable value={g.name} onCommit={(v) => updateGood(g.id, { name: v })} />
+              : g.name}
+            {!g.homebrew && <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· {g.category}</span>}
+            {g.homebrew && <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· local</span>}
           </strong>
           <span className="flex gap-sm" style={{ alignItems: 'center' }}>
-            <span className="coin gold" title="cost each">{gp(g.cost)}</span>
-            <span className="muted" style={{ fontSize: 13 }}>gp each</span>
+            <Price gp={unit} />
+            {totalMult !== 1 && <span className="muted" style={{ fontSize: 13 }}>(×{gp(totalMult)})</span>}
           </span>
         </div>
 
-        {canEdit ? (
+        {(g.desc || g.detail) && (
+          <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+            {g.detail ? <em>{g.detail}. </em> : ''}{g.desc}
+          </div>
+        )}
+
+        {g.homebrew && isDM && (
           <div className="flex gap-sm" style={{ alignItems: 'center', margin: '6px 0', flexWrap: 'wrap' }}>
             <select
-              className="select"
-              style={{ width: 'auto' }}
+              className="select" style={{ width: 'auto' }}
               value={g.provision || ''}
-              onChange={(e) => updateGood(g.id, { provision: e.target.value, servings: e.target.value ? (g.servings || 1) : (g.servings ?? 1) })}
+              onChange={(e) => updateGood(g.id, { provision: e.target.value || null })}
             >
               <option value="">🎒 Equipment</option>
               <option value="food">🍖 Food</option>
@@ -299,36 +530,43 @@ export default function InventoryTab() {
             </select>
             {kind && (
               <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                <Editable type="number" value={g.servings ?? 1} onCommit={(v) => updateGood(g.id, { servings: v })} /> {kind.each}
+                <Editable type="number" value={g.servings} onCommit={(v) => updateGood(g.id, { servings: v })} /> {kind.each}
               </span>
             )}
             <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-              cost <Editable type="number" value={g.cost ?? 0} onCommit={(v) => updateGood(g.id, { cost: v })} /> gp
+              cost <Editable type="number" value={g.base} onCommit={(v) => updateGood(g.id, { cost: v })} /> gp
             </span>
             <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-              at
-              <select className="select" style={{ width: 'auto' }} value={g.port || ''} onChange={(e) => updateGood(g.id, { port: e.target.value })}>
-                <option value="">⚓ Standard</option>
-                {allPorts.map((p) => <option key={p} value={p}>🏝 {p}</option>)}
+              sold by
+              <select className="select" style={{ width: 'auto' }} value={soldByValue(g)} onChange={(e) => setSoldBy(g, e.target.value)}>
+                {merchantsHere.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                <option value="port">🏝 This port (any merchant)</option>
+                <option value="everywhere">⚓ Everywhere</option>
               </select>
             </span>
-            <button className="btn small danger" onClick={() => removeGood(g.id)}>remove</button>
+            <button className="btn small danger" onClick={() => removeItem('marketGoods', g.id)}>remove</button>
           </div>
-        ) : (
-          kind && <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{g.servings ?? 1} {kind.unit} each</div>
+        )}
+
+        {kind && !(g.homebrew && isDM) && (
+          <div className="muted flex gap-sm" style={{ fontSize: 13, marginTop: 2, alignItems: 'center' }}>
+            {g.servings} {kind.unit} each · <Price gp={perServing} />/{kind.unit === 'cups' ? 'cup' : 'ration'}
+          </div>
         )}
 
         <div className="flex gap-sm" style={{ alignItems: 'center', marginTop: 8 }}>
           <span className="muted" style={{ fontSize: 13 }}>qty</span>
           <input
-            className="input"
-            type="number"
-            min="1"
-            style={{ width: 70 }}
-            value={buyQty[g.id] ?? 1}
-            onChange={(e) => setBuyQty((m) => ({ ...m, [g.id]: e.target.value }))}
+            className="input" type="number" min="1" style={{ width: 70 }}
+            value={buyQty[g.key] ?? 1}
+            onChange={(e) => setBuyQty((m) => ({ ...m, [g.key]: e.target.value }))}
           />
-          <button className="btn brass small" onClick={() => buyGood(g)}>Buy for {gp((Number(g.cost) || 0) * qty)} gp</button>
+          <button className="btn brass small flex gap-sm" style={{ alignItems: 'center' }} onClick={() => buyGood(g)}>
+            Buy for <Price gp={unit * qty} />
+          </button>
+          {isDM && !g.homebrew && (
+            <button className="btn small danger ghost" onClick={() => removeFromStock(g.catalogIndex)}>remove</button>
+          )}
         </div>
       </div>
     )
@@ -447,106 +685,213 @@ export default function InventoryTab() {
       {/* Provisions Market */}
       <div style={{ marginTop: 26 }}>
         <div className="sb-section-title">🏪 Provisions Market</div>
-        {!marketOpen ? (
-          <div className="card">
-            <p style={{ margin: '0 0 10px' }}>
-              Make port at a town with a market — Saltmarsh, say — to buy food and drink for the voyage.
-            </p>
-            <form className="toolbar" onSubmit={tryOpenMarket}>
-              <input
-                className="input"
-                type="password"
-                style={{ maxWidth: 220 }}
-                placeholder={canEdit ? 'market password (or just enter)' : 'market password'}
-                value={marketAttempt}
-                onChange={(e) => { setMarketAttempt(e.target.value); setMarketErr(false) }}
-              />
-              <button className="btn brass" type="submit">Enter market</button>
-            </form>
-            {marketErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>The market’s closed to you. (Wrong password.)</p>}
-            {canEdit && (
-              <div style={{ marginTop: 12 }}>
-                <label className="eyebrow">Market password (players enter this to shop)</label>
-                <Editable
-                  value={marketPass}
-                  placeholder="no password — open to all"
-                  onCommit={(v) => setSetting('market_passphrase', v)}
-                />
+        <div>
+            {/* DM setup gate — market administration is separate from the app edit gate */}
+            <div className="row-between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+              <span className="muted" style={{ fontSize: 13 }}>
+                {isDM
+                  ? '🔑 DM setup mode — you can create ports & merchants and set prices.'
+                  : 'Shopping as crew. Ports, merchants, and prices are set by the DM.'}
+              </span>
+              {isDM ? (
+                <span className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                    DM password <Editable value={dmPass} placeholder="set a DM password…" onCommit={(v) => setSetting('dm_passphrase', v)} />
+                  </span>
+                  <button className="btn small ghost" onClick={lockDM}>Exit DM mode</button>
+                </span>
+              ) : dmUnlockOpen ? (
+                <form className="toolbar" onSubmit={tryUnlockDM}>
+                  <input
+                    className="input" type="password" style={{ maxWidth: 200 }} placeholder="DM password" autoFocus
+                    value={dmAttempt}
+                    onChange={(e) => { setDmAttempt(e.target.value); setDmErr(false) }}
+                  />
+                  <button className="btn brass small" type="submit">Enter</button>
+                  <button className="btn ghost small" type="button" onClick={() => { setDmUnlockOpen(false); setDmErr(false) }}>Cancel</button>
+                </form>
+              ) : (
+                <button className="btn small ghost" onClick={() => setDmUnlockOpen(true)}>🔑 DM setup</button>
+              )}
+            </div>
+            {dmErr && <p style={{ color: 'var(--wax-red)', marginTop: -2, marginBottom: 8 }}>Wrong DM password.</p>}
+
+            {/* Port bar */}
+            <div className="row-between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+              <span className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="eyebrow">Now visiting</span>
+                <select className="select" style={{ width: 'auto' }} value={visitingPortId} onChange={(e) => selectPort(e.target.value)}>
+                  <option value="">— choose a port —</option>
+                  {ports.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {(PORT_FLAIRS[p.flair]?.emoji || '🏝')} {p.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
+              <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                <span className="muted" style={{ fontSize: 13 }}>Purse</span>
+                <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                  <span className="coin tiny gold" title="gold">{Number(purse.gold) || 0}</span>
+                  <span className="coin tiny silver" title="silver">{Number(purse.silver) || 0}</span>
+                  <span className="coin tiny copper" title="copper">{Number(purse.copper) || 0}</span>
+                </span>
+              </span>
+            </div>
+
+            {/* DM: create ports */}
+            {isDM && (
+              <div className="flex gap-sm" style={{ flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+                <span className="eyebrow">Make port:</span>
+                <button className="btn small brass" onClick={() => createPort(null)}>+ Blank</button>
+                {PORT_FLAIR_KEYS.map((k) => (
+                  <button key={k} className="btn small ghost" onClick={() => createPort(k)}>+ {PORT_FLAIRS[k].emoji} {PORT_FLAIRS[k].label}</button>
+                ))}
+                {legacyGoods.length > 0 && (
+                  <button className="btn small ghost" onClick={importLegacy}>⤵ Import old market ({legacyGoods.length})</button>
+                )}
               </div>
             )}
-          </div>
-        ) : (
-          <div>
-            <div className="row-between" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-              <span className="flex gap-sm" style={{ alignItems: 'center' }}>
-                <span className="eyebrow">Now visiting</span>
-                <select
-                  className="select"
-                  style={{ width: 'auto' }}
-                  value={selectedPort}
-                  onChange={(e) => setSelectedPort(e.target.value)}
-                >
-                  <option value="">⚓ Standard goods only</option>
-                  {allPorts.map((p) => <option key={p} value={p}>🏝 {p}</option>)}
-                </select>
-                {canEdit && <button className="btn small ghost" onClick={addPort}>+ New port</button>}
-              </span>
-              <button className="btn small ghost" onClick={() => setMarketOpen(false)}>Leave market</button>
-            </div>
 
-            {/* Standard catalog — sold at every port */}
-            <div className="row-between">
-              <span className="eyebrow">Standard provisions</span>
-              {canEdit && <button className="btn small ghost" onClick={() => addGoodTo('')}>+ Add</button>}
-            </div>
-            <div className="list" style={{ marginTop: 6 }}>
-              {standardGoods.length === 0 && (
-                <div className="card">
-                  <span className="muted">No standard goods stocked.</span>
-                  {canEdit && (
-                    <div style={{ marginTop: 8 }}>
-                      <button className="btn small brass" onClick={stockStandard}>Stock standard 5e goods</button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {standardGoods.map(renderGood)}
-            </div>
-
-            {/* Local flair — only at the selected port */}
-            {selectedPort ? (
-              <>
-                <div className="row-between" style={{ marginTop: 16 }}>
-                  <span className="eyebrow">Local flair — {selectedPort}</span>
-                  {canEdit && <button className="btn small ghost" onClick={() => addGoodTo(selectedPort)}>+ Add</button>}
-                </div>
-                <div className="list" style={{ marginTop: 6 }}>
-                  {localGoods.length === 0 && (
-                    <div className="card"><span className="muted">Nothing unique to {selectedPort} yet.</span></div>
-                  )}
-                  {localGoods.map(renderGood)}
-                </div>
-              </>
-            ) : canEdit && (
-              <div style={{ marginTop: 16 }}>
-                <span className="eyebrow">Add local flair to a port</span>
-                <div className="flex gap-sm" style={{ marginTop: 6, flexWrap: 'wrap' }}>
-                  {Object.keys(FLAIR_PACKS).map((p) => (
-                    <button key={p} className="btn small ghost" onClick={() => addFlairPack(p)}>+ {p}</button>
-                  ))}
-                </div>
-                <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  Adds an example port stocked with themed goods. Or use “+ New port”, then add your own.
-                </p>
+            {!currentPort ? (
+              <div className="card">
+                <span className="muted">
+                  {ports.length === 0
+                    ? isDM ? 'No ports yet — make one above to open its markets.' : 'No ports have been established yet.'
+                    : 'Choose a port above to browse its merchants.'}
+                </span>
               </div>
+            ) : portLocked ? (
+              <div className="card">
+                <p style={{ margin: '0 0 10px' }}>
+                  <strong>{portFlair?.emoji || '🏝'} {currentPort.name}</strong> is a private port — enter its password to see its merchants and wares.
+                </p>
+                <form className="toolbar" onSubmit={tryUnlockPort}>
+                  <input
+                    className="input" type="password" style={{ maxWidth: 220 }}
+                    placeholder="port password"
+                    value={portAttempt}
+                    onChange={(e) => { setPortAttempt(e.target.value); setPortErr(false) }}
+                  />
+                  <button className="btn brass" type="submit">Enter port</button>
+                </form>
+                {portErr && <p style={{ color: 'var(--wax-red)', marginTop: 8, marginBottom: 0 }}>Wrong password — the harbormaster waves you off.</p>}
+              </div>
+            ) : (
+              <>
+                {/* Port card */}
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div className="row-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+                    <div className="grow">
+                      {isDM ? (
+                        <div className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: 18 }}>
+                            {portFlair?.emoji || '🏝'} <Editable value={currentPort.name} onCommit={(v) => patchItem('ports', currentPort.id, { name: v })} />
+                          </strong>
+                          <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                            all prices ×<Editable type="number" value={currentPort.price_mult ?? 1} onCommit={(v) => patchItem('ports', currentPort.id, { price_mult: v })} />
+                          </span>
+                          <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                            🔒 password <Editable value={currentPort.password} placeholder="open — no password" onCommit={(v) => patchItem('ports', currentPort.id, { password: v })} />
+                          </span>
+                        </div>
+                      ) : (
+                        <strong style={{ fontSize: 18 }}>{portFlair?.emoji || '🏝'} {currentPort.name}</strong>
+                      )}
+                      <div className="muted" style={{ fontSize: 14, marginTop: 4 }}>
+                        {isDM
+                          ? <Editable value={currentPort.blurb} placeholder="a line of flavor about this port…" onCommit={(v) => patchItem('ports', currentPort.id, { blurb: v })} />
+                          : currentPort.blurb}
+                      </div>
+                    </div>
+                    {isDM && <button className="btn small danger ghost" onClick={deletePort}>remove port</button>}
+                  </div>
+                </div>
+
+                {/* Merchant tabs */}
+                <div className="flex gap-sm" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+                  {merchantsHere.map((m) => {
+                    const t = MERCHANT_TYPES[m.type]
+                    const active = currentMerchant?.id === m.id
+                    return (
+                      <button key={m.id} className={`btn small ${active ? 'brass' : 'ghost'}`} onClick={() => selectMerchant(m.id)}>
+                        {t?.emoji || '🧑‍💼'} {m.name}
+                      </button>
+                    )
+                  })}
+                  {isDM && (
+                    <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                      <select className="select" style={{ width: 'auto' }} value={newMerchantType} onChange={(e) => setNewMerchantType(e.target.value)}>
+                        {MERCHANT_TYPE_KEYS.map((k) => <option key={k} value={k}>{MERCHANT_TYPES[k].emoji} {MERCHANT_TYPES[k].label}</option>)}
+                      </select>
+                      <button className="btn small brass" onClick={addMerchant}>+ Merchant</button>
+                    </span>
+                  )}
+                </div>
+
+                {merchantsHere.length === 0 ? (
+                  <div className="card"><span className="muted">No merchants here yet{isDM ? ' — add one above.' : '.'}</span></div>
+                ) : currentMerchant && (
+                  <>
+                    {/* Merchant header / editor */}
+                    <div className="row-between" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      <span className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className="eyebrow">{merchantType?.emoji} {merchantType?.label || currentMerchant.type}</span>
+                        {isDM && (
+                          <>
+                            <Editable value={currentMerchant.name} onCommit={(v) => patchItem('merchants', currentMerchant.id, { name: v })} />
+                            <select
+                              className="select" style={{ width: 'auto' }}
+                              value={currentMerchant.type}
+                              onChange={(e) => patchItem('merchants', currentMerchant.id, { type: e.target.value })}
+                            >
+                              {MERCHANT_TYPE_KEYS.map((k) => <option key={k} value={k}>{MERCHANT_TYPES[k].emoji} {MERCHANT_TYPES[k].label}</option>)}
+                            </select>
+                            <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                              markup ×<Editable type="number" value={currentMerchant.price_mult ?? 1} onCommit={(v) => patchItem('merchants', currentMerchant.id, { price_mult: v })} />
+                            </span>
+                            <button className="btn small danger ghost" onClick={() => deleteMerchant(currentMerchant)}>remove</button>
+                          </>
+                        )}
+                      </span>
+                      <span className="muted" style={{ fontSize: 13 }}>prices ×{gp(totalMult)} here</span>
+                    </div>
+
+                    {/* Search + category chips */}
+                    <div className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                      <input className="input" style={{ maxWidth: 260 }} placeholder="Search wares…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                      {catChips.length > 2 && (
+                        <span className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
+                          {catChips.map((c) => (
+                            <button key={c} className={`btn small ${catFilter === c ? 'brass' : 'ghost'}`} onClick={() => setCatFilter(c)}>{c}</button>
+                          ))}
+                        </span>
+                      )}
+                      {isDM && <button className="btn small brass" onClick={() => { setStockSearch(''); setStockOpen(true) }}>+ Add items</button>}
+                      {isDM && <button className="btn small ghost" onClick={addLocalGood}>+ Custom good</button>}
+                    </div>
+
+                    {/* Wares */}
+                    <div className="list">
+                      {shown.length === 0 && <div className="card"><span className="muted">Nothing for sale here matches. Try another search or filter.</span></div>}
+                      {shown.map(renderGood)}
+                    </div>
+                    {filtered.length > DISPLAY_CAP && (
+                      <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                        Showing {DISPLAY_CAP} of {filtered.length} — narrow it with search or a category filter.
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
             )}
 
             <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>
-              Purchases land in the Ship’s Stores and record the cost as a ledger expense.
-              {canEdit && ' Edit names, types, servings, costs, and ports above to balance the economy.'}
+              Purchases land in the Ship’s Stores, record a ledger expense, and are paid from the purse. Prices are the 5e
+              catalog base × the port’s multiplier × the merchant’s markup.
+              {isDM && ' Tune those multipliers or add local goods to shape the economy.'}
             </p>
           </div>
-        )}
       </div>
 
       {adding && (
@@ -607,6 +952,48 @@ export default function InventoryTab() {
               <button className="btn ghost" type="button" onClick={() => setAdding(null)}>Cancel</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {stockOpen && currentMerchant && (
+        <Modal onClose={() => setStockOpen(false)}>
+          <h2 className="section-title">Stock {currentMerchant.name}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Add anything from the 5e catalog — {merchantType?.label || 'this merchant'}’s related goods are listed first. Click to add or remove.
+          </p>
+          <input
+            className="input" autoFocus placeholder="Search the catalog…"
+            value={stockSearch} onChange={(e) => setStockSearch(e.target.value)}
+            style={{ marginBottom: 10 }}
+          />
+          <div className="list" style={{ maxHeight: '52vh', overflowY: 'auto' }}>
+            {stockShown.map((c) => {
+              const inStock = stockOf(currentMerchant).includes(c.index)
+              const kind = KINDS[c.provision]
+              return (
+                <div className="card row-between" key={c.index}>
+                  <div className="grow">
+                    <strong>{kind ? kind.emoji + ' ' : ''}{c.name}</strong>
+                    <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>· {c.category}</span>
+                    <div className="muted flex gap-sm" style={{ fontSize: 13, marginTop: 2, alignItems: 'center' }}>
+                      <Price gp={c.cost_gp} />{c.detail ? ` · ${c.detail}` : ''}
+                    </div>
+                  </div>
+                  {inStock
+                    ? <button className="btn small danger ghost" onClick={() => removeFromStock(c.index)}>✓ remove</button>
+                    : <button className="btn small brass" onClick={() => addToStock(c.index)}>+ add</button>}
+                </div>
+              )
+            })}
+          </div>
+          {stockList.length > stockShown.length && (
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Showing {stockShown.length} of {stockList.length} — refine your search.
+            </p>
+          )}
+          <div className="toolbar" style={{ marginTop: 10 }}>
+            <button className="btn ghost" onClick={() => setStockOpen(false)}>Done</button>
+          </div>
         </Modal>
       )}
     </div>

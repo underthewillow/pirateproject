@@ -94,6 +94,27 @@ ddb-sheet`); it is not part of the Vite build.
 ## Data model (Supabase)
 
 Tables: `ship`, `funds` (singletons, id=1); `crew_members`, `roles`, `inventory_items`,
-`ledger_entries`, `map_locations`, `quests`, `journal_entries` (collections); `settings`
-(key/value). All have Realtime enabled. `crew_members.roles` is a `text[]` (multiple
-stations per hand); `crew_members.sheet_data` holds the normalized D&D Beyond sheet.
+`ledger_entries`, `map_locations`, `quests`, `journal_entries`, `ports`, `merchants`,
+`market_goods` (collections); `settings` (key/value). All have Realtime enabled.
+`crew_members.roles` is a `text[]` (multiple stations per hand); `crew_members.sheet_data`
+holds the normalized D&D Beyond sheet.
+
+**Provisions market** (Inventory tab). A three-level model: a **port** (`ports`, with a
+`flair` type + `price_mult`) contains **merchants** (`merchants`, each with a `type` +
+`price_mult`). Each merchant carries an explicit **`stock`** (jsonb array of catalog item
+ids), seeded with a random assortment of its type's categories at creation; the DM adds
+(from the whole catalog, via the picker modal) or removes items. The taxonomy (flairs,
+merchant types, category mappings) is client config in `src/data/market-config.js`.
+Wares come from a bundled SRD 5.1 catalog (`src/data/srd-equipment.json` + curated
+food/drink in `src/data/catalog.js`; CC-BY-4.0, prices in gp) — no table for the catalog.
+`market_goods` are homebrew extras (pinned to a `merchant_id`, else a `port_id`, else sold
+everywhere). Price = catalog base × port mult × merchant mult. Buying adds to Ship's Stores,
+logs a `ledger` expense, and deducts the `funds` purse (smallest-coin-first, in
+`InventoryTab.jsx`). One-time SQL for the tables: `supabase/schema/market.sql`.
+
+**Market permissions** are a separate tier from the app-wide `canEdit` gate. Market
+*setup* (create/edit ports, merchants, prices, port passwords) is gated by `isDM` —
+unlocked via a `dm_passphrase` setting, mirroring the `unlock`/`lock` pattern in
+`DataContext.jsx` (`unlockDM`/`lockDM`). Players don't need `isDM` or `canEdit` to shop:
+*viewing* a port needs that port's `password` (bypassed for `isDM`); *buying* is open once
+the port is viewable.
