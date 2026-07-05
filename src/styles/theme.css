@@ -851,8 +851,32 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   background: linear-gradient(120deg, rgba(64,39,22,0.20), rgba(255,250,235,0.10));
   box-shadow: inset 0 0 40px rgba(90,60,25,0.25);
 }
+.dash-hero-id { min-width: 0; }
+.dash-hero-right { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .dash-hero-stats { display: flex; gap: 22px; }
 .dash-hero-stat { text-align: center; }
+
+/* video-game gold HUD */
+.dash-treasure {
+  display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+  padding: 9px 18px 9px 12px; border-radius: 12px;
+  background: linear-gradient(158deg, #f4dc9b 0%, #d9ac48 52%, #a97e2c 100%);
+  border: 1px solid #7a5c23;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(120,80,20,0.35), 0 3px 9px rgba(40,23,12,0.4);
+  color: #3a2a0c;
+}
+.dash-treasure:hover { filter: brightness(1.04); }
+.gp-coin {
+  flex: none; width: 38px; height: 38px; border-radius: 50%; position: relative;
+  background: radial-gradient(circle at 34% 28%, #ffefb8, #e6bd52 52%, #a97e2c 100%);
+  border: 2px solid #7a5c23; box-shadow: inset 0 0 5px rgba(120,80,20,0.65);
+}
+.gp-coin::after { content: '✦'; position: absolute; inset: 0; display: grid; place-items: center; color: #8a6a2a; font-size: 18px; }
+.dash-treasure-txt { display: flex; flex-direction: column; line-height: 1.05; }
+.dash-treasure .amt { font-family: var(--font-display); font-size: 29px; font-weight: 600; }
+.dash-treasure .amt .gp { font-size: 15px; font-weight: 500; }
+.dash-treasure .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.75; }
+.dash-treasure .sub { font-size: 12px; opacity: 0.85; margin-top: 1px; }
 .dash-hero-stat .n { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--ink); }
 .dash-hero-stat .l { font-size: 12px; color: var(--ink-faded); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
 
@@ -890,11 +914,17 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
 }
 .hero-card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(40,23,12,0.4); }
 .hero-card.hurt { box-shadow: 0 3px 8px rgba(116,36,32,0.35); border-color: #a3352f; }
+/* padding-top square keeps the portrait from collapsing on iOS Safari,
+   where aspect-ratio on a flex/grid child can resolve to zero height. */
 .hero-portrait {
-  position: relative; aspect-ratio: 1/1; background-size: cover; background-position: center top;
-  display: grid; place-items: center; border-bottom: 2px solid var(--parchment-edge);
+  position: relative; width: 100%; padding-top: 100%;
+  background-size: cover; background-position: center top;
+  border-bottom: 2px solid var(--parchment-edge);
 }
-.hero-initials { font-family: var(--font-display); font-size: 44px; color: rgba(255,250,235,0.85); }
+.hero-initials {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 44px; color: rgba(255,250,235,0.85);
+}
 .hero-lvl {
   position: absolute; top: 6px; left: 6px; font-family: var(--font-display); font-size: 12px;
   padding: 2px 7px; border-radius: 10px; color: #f7ecd2; background: rgba(30,18,8,0.82); border: 1px solid var(--brass-light);

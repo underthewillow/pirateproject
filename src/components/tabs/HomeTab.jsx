@@ -65,7 +65,7 @@ export default function HomeTab({ onNavigate }) {
   if (days <= 2) alerts.push({ level: days <= 0 ? 'crit' : 'warn', icon: '🍖', tab: 'inventory', text: days <= 0 ? 'Stores are empty — the crew goes hungry.' : `Provisions run low — ${days} day${days === 1 ? '' : 's'} of supply left.` })
   if (aboard > crewMax) alerts.push({ level: 'warn', icon: '☠', tab: 'crew', text: `Overcrowded — ${aboard} hands aboard, berths for ${crewMax}.` })
   if (pax > paxMax) alerts.push({ level: 'warn', icon: '☠', tab: 'crew', text: `Too many passengers — ${pax} aboard, room for ${paxMax}.` })
-  if (ledgerTotal < 0) alerts.push({ level: 'warn', icon: '🪙', tab: 'funds', text: `The ledger is in the red — ${ledgerTotal} gp.` })
+  if (ledgerTotal < -0.5) alerts.push({ level: 'warn', icon: '🪙', tab: 'funds', text: `The ledger is in the red — ${Math.round(ledgerTotal)} gp.` })
 
   const openMember = crew.find((c) => c.id === openId)
   const openAlert = (a) => { if (a.mid) setOpenId(a.mid); else go(a.tab) }
@@ -73,15 +73,25 @@ export default function HomeTab({ onNavigate }) {
   return (
     <div className="dash">
       <div className="dash-hero">
-        <div>
+        <div className="dash-hero-id">
           <div className="eyebrow">Captain's Log</div>
           <h2 className="section-title" style={{ margin: '2px 0 2px' }}>{ship?.name || 'The Ship'}</h2>
           <div className="muted" style={{ fontStyle: 'italic' }}>{ship?.tagline || 'Fair winds and full sails.'}</div>
         </div>
-        <div className="dash-hero-stats">
-          <div className="dash-hero-stat"><div className="n">{pcs.length}</div><div className="l">crew of note</div></div>
-          <div className="dash-hero-stat"><div className="n">{aboard}</div><div className="l">hands aboard</div></div>
-          <div className="dash-hero-stat"><div className="n">{activeQuests.length}</div><div className="l">open jobs</div></div>
+        <div className="dash-hero-right">
+          <button className="dash-treasure" onClick={() => go('funds')} title="Open the ledger">
+            <span className="gp-coin" />
+            <span className="dash-treasure-txt">
+              <span className="amt">{num(purse.gold).toLocaleString()}<span className="gp"> gp</span></span>
+              <span className="lbl">in the coffers</span>
+              <span className="sub">{num(purse.silver)} silver · {num(purse.copper)} copper</span>
+            </span>
+          </button>
+          <div className="dash-hero-stats">
+            <div className="dash-hero-stat"><div className="n">{pcs.length}</div><div className="l">crew of note</div></div>
+            <div className="dash-hero-stat"><div className="n">{aboard}</div><div className="l">hands aboard</div></div>
+            <div className="dash-hero-stat"><div className="n">{activeQuests.length}</div><div className="l">active quests</div></div>
+          </div>
         </div>
       </div>
 
@@ -166,12 +176,12 @@ export default function HomeTab({ onNavigate }) {
         <button className="dash-card" onClick={() => go('funds')}>
           <div className="dash-card-head"><span className="dash-card-ic">🪙</span> Funds</div>
           <div className="dash-card-num">{num(purse.gold).toLocaleString()} <span className="muted" style={{ fontSize: 15 }}>gp</span></div>
-          <div className="dash-card-sub muted">{num(purse.silver)} silver · {num(purse.copper)} copper · ledger {ledgerTotal >= 0 ? '+' : ''}{ledgerTotal} gp</div>
+          <div className="dash-card-sub muted">{num(purse.silver)} silver · {num(purse.copper)} copper · ledger {ledgerTotal >= 0 ? '+' : ''}{Math.round(ledgerTotal)} gp</div>
         </button>
 
         <button className="dash-card" onClick={() => go('quests')}>
           <div className="dash-card-head"><span className="dash-card-ic">📜</span> Posterboard</div>
-          <div className="dash-card-num">{activeQuests.length} <span className="muted" style={{ fontSize: 15 }}>open jobs</span></div>
+          <div className="dash-card-num">{activeQuests.length} <span className="muted" style={{ fontSize: 15 }}>active quests</span></div>
           <div className="dash-card-sub muted">
             {mainQuests.slice(0, 3).map((q) => <span key={q.id} className="dash-quest">◆ {q.title}</span>)}
             {mainQuests.length === 0 && 'No main quests afoot.'}
