@@ -25,6 +25,7 @@ const COLLECTIONS = {
   ports: 'ports',
   merchants: 'merchants',
   marketGoods: 'market_goods',
+  appUsers: 'app_users',
 }
 const SINGLETONS = { ship: 'ship', funds: 'funds' }
 const ALL_TABLES = [
@@ -52,6 +53,7 @@ export function DataProvider({ children }) {
     ports: [],
     merchants: [],
     marketGoods: [],
+    appUsers: [],
     settings: {},
   })
   const [loading, setLoading] = useState(true)
@@ -78,6 +80,7 @@ export function DataProvider({ children }) {
         ports,
         merchants,
         marketGoods,
+        appUsers,
         settingsRows,
       ] = await Promise.all([
         fetchAll('ship').then((r) => r[0] ?? null),
@@ -94,11 +97,13 @@ export function DataProvider({ children }) {
         fetchAll('ports').catch(() => []),
         fetchAll('merchants').catch(() => []),
         fetchAll('market_goods').catch(() => []),
+        // app_users needs its own one-time SQL migration too (supabase/schema/app_users.sql).
+        fetchAll('app_users', 'created_at').catch(() => []),
         fetchAll('settings', 'key'),
       ])
       const settings = {}
       for (const row of settingsRows) settings[row.key] = row.value
-      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, settings })
+      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, appUsers, settings })
       setError(null)
     } catch (e) {
       console.error(e)
@@ -158,7 +163,7 @@ export function DataProvider({ children }) {
   }
 
   function sortList(key, list) {
-    if (key === 'ledger' || key === 'locations') {
+    if (key === 'ledger' || key === 'locations' || key === 'appUsers') {
       return [...list].sort((a, b) => (a.created_at > b.created_at ? 1 : -1))
     }
     return [...list].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -221,6 +226,49 @@ export function DataProvider({ children }) {
     return patchItem('crew', memberId, { roles: current.filter((r) => r !== roleName) })
   }, [patchItem])
 
+  // Multiple RBAC roles per app user (app_users.roles is a text[] column, same
+  // convention as crew_members.roles).
+  const addUserRole = useCallback((userId, role) => {
+    const u = dataRef.current.appUsers.find((r) => r.id === userId)
+    if (!u) return
+    const current = Array.isArray(u.roles) ? u.roles : []
+    if (current.includes(role)) return
+    return patchItem('appUsers', userId, { roles: [...current, role] })
+  }, [patchItem])
+
+  const removeUserRole = useCallback((userId, role) => {
+    const u = dataRef.current.appUsers.find((r) => r.id === userId)
+    if (!u) return
+    const current = Array.isArray(u.roles) ? u.roles : []
+    return patchItem('appUsers', userId, { roles: current.filter((r) => r !== role) })
+  }, [patchItem])
+
+  const setLinkedCrewIds = useCallback((userId, crewIds) => {
+    return patchItem('appUsers', userId, { linked_crew_ids: crewIds })
+  }, [patchItem])
+
+  // Create-or-update the app_users row for whoever just logged in (OIDC sub,
+  // or the reserved 'local-admin' breakglass id). Brand-new users get no
+  // roles at all (read-only "birthright" access) — an admin grants
+  // crew_member/dm/admin/etc. from Settings > User Management.
+  const upsertAppUser = useCallback(async (id, fields) => {
+    const existing = dataRef.current.appUsers.find((u) => u.id === id)
+    const row = await upsertRow('app_users', {
+      id,
+      roles: existing?.roles ?? [],
+      linked_crew_ids: existing?.linked_crew_ids ?? [],
+      ...fields,
+      last_login_at: new Date().toISOString(),
+    })
+    setData((d) => ({
+      ...d,
+      appUsers: d.appUsers.some((u) => u.id === row.id)
+        ? d.appUsers.map((u) => (u.id === row.id ? row : u))
+        : sortList('appUsers', [...d.appUsers, row]),
+    }))
+    return row
+  }, [])
+
   const patchSingleton = useCallback(async (key, patch) => {
     const table = SINGLETONS[key]
     setData((d) => ({ ...d, [key]: { ...d[key], ...patch } }))
@@ -237,30 +285,8 @@ export function DataProvider({ children }) {
     await upsertRow('settings', { key, value }, 'key')
   }, [])
 
-  // ---- edit gate ----
-  const unlock = useCallback(
-    (attempt) => {
-      const pass = dataRef.current.settings?.edit_passphrase
-      if (pass == null || String(attempt) === String(pass)) {
-        setCanEdit(true)
-        return true
-      }
-      return false
-    },
-    []
-  )
-  const lock = useCallback(() => setCanEdit(false), [])
-
-  // ---- DM gate (separate, higher tier used for market administration) ----
-  const unlockDM = useCallback((attempt) => {
-    const pass = dataRef.current.settings?.dm_passphrase
-    if (pass == null || String(attempt) === String(pass)) {
-      setIsDM(true)
-      return true
-    }
-    return false
-  }, [])
-  const lockDM = useCallback(() => setIsDM(false), [])
+  // canEdit / isDM are now driven by AuthContext (derived from the logged-in
+  // user's roles) via these setters, rather than by a standalone passphrase.
 
   const value = useMemo(
     () => ({
@@ -268,21 +294,23 @@ export function DataProvider({ children }) {
       loading,
       error,
       canEdit,
-      unlock,
-      lock,
+      setCanEdit,
       isDM,
-      unlockDM,
-      lockDM,
+      setIsDM,
       reload: load,
       addItem,
       patchItem,
       removeItem,
       addRole,
       removeRole,
+      addUserRole,
+      removeUserRole,
+      setLinkedCrewIds,
+      upsertAppUser,
       patchSingleton,
       setSetting,
     }),
-    [data, loading, error, canEdit, unlock, lock, isDM, unlockDM, lockDM, load, addItem, patchItem, removeItem, addRole, removeRole, patchSingleton, setSetting]
+    [data, loading, error, canEdit, isDM, load, addItem, patchItem, removeItem, addRole, removeRole, addUserRole, removeUserRole, setLinkedCrewIds, upsertAppUser, patchSingleton, setSetting]
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

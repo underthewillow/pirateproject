@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A shared, no-login web app ("The Captain's Log") for tracking a pirate D&D campaign:
+A login-gated web app ("The Captain's Log") for tracking a pirate D&D campaign:
 ship, crew, roles, inventory, funds/ledger, a fog-of-war map, quests, journal, and a
 DM tab. Everything persists to Supabase and syncs live to every open browser. React +
-Vite SPA, deployed to GitHub Pages.
+Vite SPA, deployed to GitHub Pages. Login is via OIDC (Authentik) or a local breakglass
+admin password; role-based access control gates editing and admin features (see
+Authentication & roles below).
 
 ## Commands
 
@@ -49,11 +51,28 @@ usually "new table + new tab," no new data plumbing.
 (`key`, `label`, `icon`, `component`) plus a component in `src/components/tabs/` to add
 a section. `App.jsx` renders the active tab from this list.
 
-**Edit gate.** Everything is world-readable and world-writable at the DB level (public
-anon key, open RLS). Editing in the UI is gated by a shared passphrase stored in the
-`settings` table (`edit_passphrase`). `canEdit` from `useData()` toggles editability
-everywhere; `EditGate.jsx` handles unlock/lock/change. This is a soft deterrent, **not
-real security** — do not treat the client gate as an authorization boundary.
+**Authentication & roles.** Everything is world-readable and world-writable at the DB
+level (public anon key, open RLS) — auth is enforced at the app layer only, **not a real
+security boundary** (same soft-deterrent model as before, now backed by real identity
+instead of a shared word). `src/context/AuthContext.jsx` (`AppAuthProvider`/`useAppAuth()`)
+is the login layer, mounted between `DataProvider` and `App`: it wraps `react-oidc-context`
+for OIDC login against Authentik (config read from `settings.oidc_issuer_url` /
+`oidc_client_id`, editable live in Settings but only applied to the OIDC client after a
+page refresh — see the comment in `AppAuthProvider`) and a local breakglass admin path
+(`settings.local_admin_passphrase`, checked client-side like the old passphrases). Every
+logged-in identity — OIDC subject or the single reserved `local-admin` row — is a row in
+the `app_users` table (`supabase/schema/app_users.sql`), holding `roles` (`text[]`) and
+`linked_crew_ids` (`uuid[]`, foundation for a future "which character am I playing"
+feature). `src/config/roles.js` defines the fixed role set (`admin`, `dm`, `crew_member`,
+plus the ship-station names) — distinct from the `roles` table, which is ship-station
+*content*. A brand-new login gets **no roles at all** (read-only birthright access,
+`upsertAppUser` in `DataContext.jsx`); an admin grants `crew_member`/`dm`/`admin`/etc. from
+Settings > User Management. `canEdit`/`isDM` (from `useData()`, consumed the same way everywhere) are now
+derived from roles (`admin`/`dm` → both true) via an effect in `AuthContext.jsx`, not a
+standalone unlock action. `App.jsx` hard-gates all tabs behind `authReady && identity`,
+rendering `LoginPage.jsx` otherwise. `SettingsPage.jsx` (opened from the header gear) has
+role-gated sub-tabs: Authentication and User Management (admin-only), DM Settings
+(admin/dm), General (everyone).
 
 **Drag-and-drop** uses `@dnd-kit` wrapped by `src/components/common/Dnd.jsx`
 (`Draggable`/`Droppable`) so every tab drags the same way.
@@ -62,7 +81,9 @@ real security** — do not treat the client gate as an authorization boundary.
 `rollD20`, `abilityMod`). Any roll from anywhere calls `useRoller().show()` from
 `src/context/RollContext.jsx`, which plays a sound and pops the global animated overlay.
 
-**Provider nesting** (`src/main.jsx`): `DataProvider` → `RollProvider` → `App`.
+**Provider nesting** (`src/main.jsx`): `DataProvider` → `AppAuthProvider` → `RollProvider`
+→ `App`. Auth is nested inside `DataProvider` because it needs `settings`/`app_users` via
+`useData()`.
 
 ## D&D Beyond sync
 
@@ -95,9 +116,10 @@ ddb-sheet`); it is not part of the Vite build.
 
 Tables: `ship`, `funds` (singletons, id=1); `crew_members`, `roles`, `inventory_items`,
 `ledger_entries`, `map_locations`, `quests`, `journal_entries`, `ports`, `merchants`,
-`market_goods` (collections); `settings` (key/value). All have Realtime enabled.
-`crew_members.roles` is a `text[]` (multiple stations per hand); `crew_members.sheet_data`
-holds the normalized D&D Beyond sheet.
+`market_goods`, `app_users` (collections); `settings` (key/value). All have Realtime
+enabled. `crew_members.roles` is a `text[]` (multiple stations per hand);
+`crew_members.sheet_data` holds the normalized D&D Beyond sheet. `app_users` holds RBAC
+state keyed by OIDC subject (or `local-admin`) — see Authentication & roles above.
 
 **Provisions market** (Inventory tab). A three-level model: a **port** (`ports`, with a
 `flair` type + `price_mult`) contains **merchants** (`merchants`, each with a `type` +
@@ -115,9 +137,8 @@ Price = catalog base × port mult × merchant mult. Buying adds to Ship's Stores
 logs a `ledger` expense, and deducts the `funds` purse (smallest-coin-first, in
 `InventoryTab.jsx`). One-time SQL for the tables: `supabase/schema/market.sql`.
 
-**Market permissions** are a separate tier from the app-wide `canEdit` gate. Market
-*setup* (create/edit ports, merchants, prices, port passwords) is gated by `isDM` —
-unlocked via a `dm_passphrase` setting, mirroring the `unlock`/`lock` pattern in
-`DataContext.jsx` (`unlockDM`/`lockDM`). Players don't need `isDM` or `canEdit` to shop:
-*viewing* a port needs that port's `password` (bypassed for `isDM`); *buying* is open once
-the port is viewable.
+**Market permissions** use the same `isDM` flag as the rest of the app (role-derived, see
+Authentication & roles above) — market setup (create/edit ports, merchants, prices, port
+passwords) is gated by `isDM`, not a separate unlock. Players don't need `isDM` or
+`canEdit` to shop: *viewing* a port needs that port's `password` (bypassed for `isDM`,
+checked client-side, unrelated to login); *buying* is open once the port is viewable.

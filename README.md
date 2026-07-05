@@ -1,6 +1,6 @@
 # ☠ The Captain's Log — Pirate Campaign Manager
 
-A shared, no-login web app for tracking a pirate D&D crew: the ship, the crew,
+A login-gated web app for tracking a pirate D&D crew: the ship, the crew,
 their roles, inventory & cargo, funds & ledger, a map of charted waters, and a
 posterboard of quests. Everything saves to a Supabase database and syncs live to
 everyone who has the page open. Styled like a captain's log — parchment, ink,
@@ -16,9 +16,11 @@ brown leather and wood.
 - **The Map** — drop and drag markers on a chart; mark places discovered or unknown.
 - **Posterboard** — main quests and side quests you can mark done.
 
-A shared **passphrase** unlocks editing (so a random visitor can't wipe your
-ledger). The current passphrase is **`anchorsaweigh`** — change it any time from
-the ⚙ Settings button after unlocking.
+Logging in is required to see anything — either with SSO (via a self-hosted
+Authentik instance) or a local breakglass admin password, set from **⚙ Settings
+→ Authentication** (admin only). New logins start out read-only with no roles
+at all; an admin grants **Crew Member**/**DM**/**Admin**/etc. from **⚙ Settings
+→ User Management**.
 
 ## Running it locally
 
@@ -46,18 +48,20 @@ on the `main` branch of `github.com/underthewillow/pirateproject`:
 The project is built to be easy to extend:
 
 - **Add or rename a tab:** edit `src/config/tabs.js` and add a component in `src/components/tabs/`.
-- **Crew, roles, quests, etc.** are all rows in the database — add them in-app (unlock editing first) or in the Supabase table editor.
+- **Crew, roles, quests, etc.** are all rows in the database — add them in-app (as an admin or DM) or in the Supabase table editor.
 - **Colours, fonts, textures** all live as CSS variables at the top of `src/styles/theme.css`.
 - **Supabase connection** is in `src/config/supabaseConfig.js` (the publishable key is safe to ship in a public app).
 
 ## Data model (Supabase)
 
 Tables: `ship`, `crew_members`, `roles`, `inventory_items`, `funds`,
-`ledger_entries`, `map_locations`, `quests`, `settings`. Row-level security is on
-but open to the public anon key (the app is intentionally login-free); the
-passphrase gate is a soft deterrent in the client. All tables have Realtime
-enabled so edits appear for everyone instantly.
+`ledger_entries`, `map_locations`, `quests`, `settings`, `app_users`. Row-level
+security is on but open to the public anon key — access control (who can log in,
+who can edit) is enforced in the app, not the database, so this is a soft
+deterrent, not real security. All tables have Realtime enabled so edits appear
+for everyone instantly.
 
-To harden later: move writes behind a Postgres function or edge function that
-checks the passphrase server-side, and tighten the RLS policies to read-only for
-the public role.
+To harden later: trust the OIDC-issued JWT at the database layer (Supabase
+supports this for any standards-compliant OIDC provider — see "Third-party auth"
+in their docs) and tighten RLS to require it, rather than leaving every table
+open to the anon key.

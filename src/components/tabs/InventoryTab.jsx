@@ -100,16 +100,13 @@ export default function InventoryTab() {
   const {
     inventory, crew, settings, ports, merchants, marketGoods, funds,
     addItem, patchItem, removeItem, patchSingleton, setSetting, canEdit,
-    isDM, unlockDM, lockDM,
+    isDM,
   } = useData()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [adding, setAdding] = useState(null) // { container } while the add-item dialog is open
   const [unlockedPorts, setUnlockedPorts] = useState({}) // { [portId]: true } unlocked this session
   const [portAttempt, setPortAttempt] = useState('')
   const [portErr, setPortErr] = useState(false)
-  const [dmUnlockOpen, setDmUnlockOpen] = useState(false)
-  const [dmAttempt, setDmAttempt] = useState('')
-  const [dmErr, setDmErr] = useState(false)
   const [stockOpen, setStockOpen] = useState(false) // catalog picker modal
   const [stockSearch, setStockSearch] = useState('')
   const [buyQty, setBuyQty] = useState({}) // per-good purchase quantity, keyed by good key
@@ -253,7 +250,6 @@ export default function InventoryTab() {
   // A port with a password is hidden from players until they unlock it this session.
   // The DM always sees every port.
   const portLocked = !!(currentPort && currentPort.password && !isDM && !unlockedPorts[currentPort.id])
-  const dmPass = settings?.dm_passphrase
   const legacyGoods = Array.isArray(settings?.market_items) ? settings.market_items : []
 
   // Coin purse (Funds tab), reckoned in copper so we can spend fractional gp.
@@ -276,12 +272,6 @@ export default function InventoryTab() {
     if (String(portAttempt) === String(currentPort.password ?? '')) {
       setUnlockedPorts((u) => ({ ...u, [currentPort.id]: true })); setPortErr(false); setPortAttempt('')
     } else setPortErr(true)
-  }
-
-  const tryUnlockDM = (e) => {
-    e.preventDefault()
-    if (unlockDM(dmAttempt)) { setDmErr(false); setDmAttempt(''); setDmUnlockOpen(false) }
-    else setDmErr(true)
   }
 
   // Wares this merchant sells: the items in its `stock` list + attached homebrew.
@@ -683,35 +673,14 @@ export default function InventoryTab() {
       <div style={{ marginTop: 26 }}>
         <div className="sb-section-title">🏪 Provisions Market</div>
         <div>
-            {/* DM setup gate — market administration is separate from the app edit gate */}
+            {/* DM setup mode is automatic for anyone logged in with the dm/admin role. */}
             <div className="row-between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
               <span className="muted" style={{ fontSize: 13 }}>
                 {isDM
                   ? '🔑 DM setup mode — you can create ports & merchants and set prices.'
                   : 'Shopping as crew. Ports, merchants, and prices are set by the DM.'}
               </span>
-              {isDM ? (
-                <span className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                    DM password <Editable value={dmPass} placeholder="set a DM password…" onCommit={(v) => setSetting('dm_passphrase', v)} />
-                  </span>
-                  <button className="btn small ghost" onClick={lockDM}>Exit DM mode</button>
-                </span>
-              ) : dmUnlockOpen ? (
-                <form className="toolbar" onSubmit={tryUnlockDM}>
-                  <input
-                    className="input" type="password" style={{ maxWidth: 200 }} placeholder="DM password" autoFocus
-                    value={dmAttempt}
-                    onChange={(e) => { setDmAttempt(e.target.value); setDmErr(false) }}
-                  />
-                  <button className="btn brass small" type="submit">Enter</button>
-                  <button className="btn ghost small" type="button" onClick={() => { setDmUnlockOpen(false); setDmErr(false) }}>Cancel</button>
-                </form>
-              ) : (
-                <button className="btn small ghost" onClick={() => setDmUnlockOpen(true)}>🔑 DM setup</button>
-              )}
             </div>
-            {dmErr && <p style={{ color: 'var(--wax-red)', marginTop: -2, marginBottom: 8 }}>Wrong DM password.</p>}
 
             {/* Port bar */}
             <div className="row-between" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>

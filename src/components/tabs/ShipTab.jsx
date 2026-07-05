@@ -291,7 +291,7 @@ export default function ShipTab() {
             </div>
             <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
               Install/Uninstall is a reversible toggle — installing records the cost in the ledger, uninstalling refunds it.
-              {canEdit ? ' Unlocked: edit names, costs and effects, or add your own.' : ' Unlock the log up top to edit or add upgrades.'}
+              {canEdit ? ' Unlocked: edit names, costs and effects, or add your own.' : ' Admin or DM access is needed to edit or add upgrades.'}
             </p>
           </div>
         )}
