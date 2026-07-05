@@ -401,13 +401,6 @@ body {
 .coin.silver { background: radial-gradient(circle at 35% 30%, #eee, #b7bcc2); color: #3a3f45; }
 .coin.copper { background: radial-gradient(circle at 35% 30%, #e6a06a, #a5622f); color: #4a2410; }
 
-/* Small inline coin disc for prices (a count overlaid on a coin). */
-.coin.tiny {
-  width: 22px; height: 22px; font-size: 11px; font-weight: 700;
-  border-width: 1px; box-shadow: inset 0 1px 2px rgba(255,255,255,0.45), 0 1px 2px var(--shadow);
-}
-.price-coins { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
-
 /* ---------- modal ---------- */
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -844,4 +837,113 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   .avatar { width: 48px; height: 48px; font-size: 18px; }
   .crew-token { padding: 6px 10px 6px 6px; }
   .section-title { font-size: 20px; }
+}
+
+/* ============================================================
+   The Helm — landing dashboard
+   ============================================================ */
+.dash { display: flex; flex-direction: column; gap: 16px; }
+
+.dash-hero {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 18px; border-radius: var(--radius);
+  border: 1px solid var(--parchment-edge);
+  background: linear-gradient(120deg, rgba(64,39,22,0.20), rgba(255,250,235,0.10));
+  box-shadow: inset 0 0 40px rgba(90,60,25,0.25);
+}
+.dash-hero-stats { display: flex; gap: 22px; }
+.dash-hero-stat { text-align: center; }
+.dash-hero-stat .n { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--ink); }
+.dash-hero-stat .l { font-size: 12px; color: var(--ink-faded); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+
+.dash-sec-title {
+  font-family: var(--font-display); font-size: 18px; color: var(--ink);
+  border-bottom: 1px solid var(--ink-faded); padding-bottom: 4px; margin: 6px 0 2px;
+}
+.dash-sec-title .muted { font-size: 13px; font-family: var(--font-ui); }
+
+/* ---- needs-attention ---- */
+.dash-alerts { display: flex; flex-direction: column; gap: 8px; }
+.dash-alert {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 14px; border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-ui); font-size: 15px; color: var(--ink);
+  border: 1px solid var(--parchment-edge); background: rgba(255,250,235,0.4);
+}
+.dash-alert .dash-alert-ic { font-size: 18px; }
+.dash-alert .dash-alert-go { margin-left: auto; font-size: 22px; opacity: 0.5; }
+.dash-alert.warn { border-left: 5px solid #c08a2c; }
+.dash-alert.crit { border-left: 5px solid var(--wax-red); background: rgba(116,36,32,0.10); }
+.dash-alert.calm { border-left: 5px solid #3a7a4a; cursor: default; }
+.dash-alert:not(.calm):hover { background: rgba(255,250,235,0.7); }
+
+/* ---- RPG party panel ---- */
+.hero-party {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px;
+}
+.hero-card {
+  display: flex; flex-direction: column; text-align: left; cursor: pointer; overflow: hidden;
+  border-radius: 10px; padding: 0; background: rgba(255,250,235,0.45);
+  border: 1px solid var(--parchment-edge);
+  box-shadow: 0 3px 8px rgba(60,36,12,0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.hero-card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(40,23,12,0.4); }
+.hero-card.hurt { box-shadow: 0 3px 8px rgba(116,36,32,0.35); border-color: #a3352f; }
+.hero-portrait {
+  position: relative; aspect-ratio: 1/1; background-size: cover; background-position: center top;
+  display: grid; place-items: center; border-bottom: 2px solid var(--parchment-edge);
+}
+.hero-initials { font-family: var(--font-display); font-size: 44px; color: rgba(255,250,235,0.85); }
+.hero-lvl {
+  position: absolute; top: 6px; left: 6px; font-family: var(--font-display); font-size: 12px;
+  padding: 2px 7px; border-radius: 10px; color: #f7ecd2; background: rgba(30,18,8,0.82); border: 1px solid var(--brass-light);
+}
+.hero-ac {
+  position: absolute; top: 6px; right: 6px; font-size: 12px; font-weight: 600;
+  padding: 2px 7px; border-radius: 10px; color: #f7ecd2; background: rgba(30,40,70,0.82); border: 1px solid #6f7fae;
+}
+.hero-body { padding: 8px 10px 10px; }
+.hero-name { font-family: var(--font-display); font-size: 17px; color: var(--ink); line-height: 1.1; }
+.hero-class { font-size: 12px; margin: 1px 0 6px; }
+.hero-hpbar { height: 9px; border-radius: 5px; background: rgba(40,23,12,0.22); overflow: hidden; border: 1px solid rgba(40,23,12,0.3); }
+.hero-hpfill { display: block; height: 100%; border-radius: 5px 0 0 5px; transition: width 0.3s ease; }
+.hero-hpnum { font-size: 13px; font-weight: 600; margin-top: 3px; }
+.hero-roles { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
+.hero-chip {
+  font-size: 10.5px; font-family: var(--font-ui); padding: 1px 6px; border-radius: 8px;
+  background: rgba(150,120,58,0.18); border: 1px solid var(--brass); color: var(--ink-soft);
+}
+
+/* ---- ship's company (NPC hands) ---- */
+.dash-hands { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-hand {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; text-align: left;
+  padding: 5px 12px 5px 5px; border-radius: 30px;
+  background: rgba(255,250,235,0.4); border: 1px solid var(--parchment-edge);
+}
+.dash-hand:hover { background: rgba(255,250,235,0.7); }
+.dash-hand-name { font-family: var(--font-ui); font-weight: 600; font-size: 14px; color: var(--ink); line-height: 1.05; }
+.dash-hand-role { font-size: 11.5px; text-transform: capitalize; }
+
+/* ---- summary cards ---- */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.dash-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer;
+  padding: 14px 16px; border-radius: var(--radius); min-height: 118px;
+  background: rgba(255,250,235,0.42); border: 1px solid var(--parchment-edge);
+  box-shadow: 0 2px 6px rgba(60,36,12,0.2); transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.dash-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(40,23,12,0.32); }
+.dash-card-head { font-family: var(--font-display); font-size: 16px; color: var(--ink); display: flex; align-items: center; gap: 7px; }
+.dash-card-ic { font-size: 17px; }
+.dash-card-num { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--ink); }
+.dash-card-sub { font-size: 13px; display: flex; flex-direction: column; gap: 1px; }
+.dash-quest { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dash-hpbar.big { height: 12px; border-radius: 6px; background: rgba(40,23,12,0.22); overflow: hidden; border: 1px solid rgba(40,23,12,0.3); }
+.dash-hpbar.big span { display: block; height: 100%; border-radius: 6px 0 0 6px; transition: width 0.3s ease; }
+
+@media (max-width: 640px) {
+  .dash-hero { flex-direction: column; align-items: flex-start; }
+  .hero-party { grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); }
 }

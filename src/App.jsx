@@ -5,7 +5,7 @@ import EditGate from './components/EditGate'
 
 export default function App() {
   const { loading, error, ship, canEdit } = useData()
-  const [active, setActive] = useState('ship')
+  const [active, setActive] = useState('home')
 
   const ActiveTab = TABS.find((t) => t.key === active)?.component
 
@@ -44,7 +44,7 @@ export default function App() {
             <p className="muted">{error}</p>
           </div>
         ) : (
-          ActiveTab && <ActiveTab />
+          ActiveTab && <ActiveTab onNavigate={setActive} />
         )}
       </main>
 

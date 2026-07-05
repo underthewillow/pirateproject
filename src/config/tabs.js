@@ -1,3 +1,4 @@
+import HomeTab from '../components/tabs/HomeTab'
 import ShipTab from '../components/tabs/ShipTab'
 import CrewTab from '../components/tabs/CrewTab'
 import RolesTab from '../components/tabs/RolesTab'
@@ -10,6 +11,7 @@ import DeskTab from '../components/tabs/DeskTab'
 
 // Adding a new section later = add one entry here + one component file.
 export const TABS = [
+  { key: 'home', label: 'The Helm', icon: '🏴‍☠️', component: HomeTab },
   { key: 'ship', label: 'The Ship', icon: '⚓', component: ShipTab },
   { key: 'crew', label: 'The Crew', icon: '☠', component: CrewTab },
   { key: 'roles', label: 'Crew Roles', icon: '🎖', component: RolesTab },
