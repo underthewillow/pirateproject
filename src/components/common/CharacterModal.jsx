@@ -11,6 +11,7 @@ import { RANK_KEYS, rankKey, rankLabel } from '../../lib/ranks'
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
   { value: 'passenger', label: 'Passenger' },
+  { value: 'met', label: 'The Gangplank (newly met)' },
   { value: 'shore', label: 'Ashore' },
   { value: 'available', label: 'Available (reserve)' },
 ]

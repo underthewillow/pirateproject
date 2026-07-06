@@ -68,3 +68,31 @@
 /* crew-token pill — staged NPC */
 .crew-token.concealed { opacity: 0.72; outline: 1px dashed #6a4a86; outline-offset: 1px; border-radius: 8px; }
 .hide-mask { margin-right: 3px; font-size: 12px; }
+
+/* ---- Crew board: compact character cards (the Helm's look, a size down) ---- */
+.crew-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+.crew-card {
+  width: 118px; display: flex; flex-direction: column; text-align: left; cursor: grab; overflow: hidden;
+  border-radius: 9px; background: rgba(255,250,235,0.5);
+  border: 1px solid var(--parchment-edge); box-shadow: 0 2px 6px rgba(60,36,12,0.25);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.crew-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(40,23,12,0.35); }
+.crew-card.hurt { border-color: #a3352f; }
+.crew-card.downed { filter: grayscale(0.55); border-color: var(--wax-red); box-shadow: inset 0 0 0 2px rgba(116,36,32,0.4); }
+.crew-card.concealed { opacity: 0.72; border-style: dashed; border-color: #6a4a86; }
+.crew-card-portrait {
+  position: relative; width: 100%; padding-top: 100%;
+  background-size: cover; background-position: center top;
+  border-bottom: 1px solid var(--parchment-edge);
+}
+.crew-card-initials {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 30px; color: rgba(255,250,235,0.85);
+}
+.crew-card-star { position: absolute; bottom: 3px; left: 5px; color: var(--brass-light); font-size: 14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.85)); }
+.crew-card-body { padding: 6px 8px 8px; }
+.crew-card .npc-mini-name { font-size: 13.5px; }
+.crew-card .npc-rank { font-size: 9.5px; padding: 1px 6px; }
+.crew-card-class { font-size: 10.5px; margin-top: 2px; line-height: 1.15; }
+@media (max-width: 640px) { .crew-card { width: 104px; } }
