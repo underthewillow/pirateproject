@@ -5,11 +5,15 @@ import Avatar from './Avatar'
 // but not while dragging (dnd-kit uses an activation distance).
 export default function CrewToken({ member, onOpen, showRole = false }) {
   const roles = Array.isArray(member.roles) ? member.roles : []
+  // Hidden members only ever reach this component for the DM (the data layer
+  // filters them out for everyone else), so the mask badge is a DM-only cue.
+  const hidden = !!member.stats?.hidden
   return (
-    <div className="crew-token" onClick={() => onOpen?.(member)}>
+    <div className={`crew-token ${hidden ? 'concealed' : ''}`} onClick={() => onOpen?.(member)}>
       <Avatar member={member} size="sm" />
       <div>
         <div className="name">
+          {hidden && <span className="hide-mask" title="Hidden from the crew">🎭</span>}
           {member.is_pc && <span className="pc-star" title="Player character">★</span>}
           {member.name}
         </div>

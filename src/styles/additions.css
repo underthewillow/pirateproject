@@ -46,3 +46,25 @@
   background: rgba(116,36,32,0.14); border: 1px solid var(--wax-red);
   color: var(--ink); font-family: var(--font-ui); font-weight: 600; font-size: 14px;
 }
+
+/* ---- DM staging: hidden-from-crew markers (only ever shown to the DM) ---- */
+.hidden-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 12px; padding: 8px 12px; border-radius: 6px;
+  background: repeating-linear-gradient(45deg, rgba(60,40,90,0.12), rgba(60,40,90,0.12) 9px, rgba(60,40,90,0.20) 9px, rgba(60,40,90,0.20) 18px);
+  border: 1px dashed #6a4a86; color: var(--ink);
+  font-family: var(--font-ui); font-size: 13.5px;
+}
+.hidden-banner > span { flex: 1 1 200px; }
+
+/* mini card — a staged NPC the crew can't see yet */
+.npc-mini.concealed { opacity: 0.72; border-style: dashed; border-color: #6a4a86; }
+.npc-mini.concealed .npc-mini-portrait { filter: saturate(0.7); }
+.npc-mini-hide {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  font-size: 15px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
+}
+
+/* crew-token pill — staged NPC */
+.crew-token.concealed { opacity: 0.72; outline: 1px dashed #6a4a86; outline-offset: 1px; border-radius: 8px; }
+.hide-mask { margin-right: 3px; font-size: 12px; }

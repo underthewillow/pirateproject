@@ -153,13 +153,15 @@ export default function HomeTab({ onNavigate }) {
               const cur = num(s.hpCurrent ?? s.maxHp)
               const pct = mx ? Math.max(0, Math.min(1, cur / mx)) : 1
               const cond = m.stats?.condition
+              const hidden = !!m.stats?.hidden
               const rk = rankKey(m)
               const portrait = m.image_url || m.portrait_url
               return (
-                <button key={m.id} className={`npc-mini ${cond ? 'downed' : (mx && pct <= 0.5 ? 'hurt' : '')}`} onClick={() => setOpenId(m.id)} title={cond ? `${m.name} — ${cond}` : m.name}>
+                <button key={m.id} className={`npc-mini ${hidden ? 'concealed' : ''} ${cond ? 'downed' : (mx && pct <= 0.5 ? 'hurt' : '')}`} onClick={() => setOpenId(m.id)} title={hidden ? `${m.name} — hidden from crew` : cond ? `${m.name} — ${cond}` : m.name}>
                   <div className="npc-mini-portrait" style={portrait ? { backgroundImage: `url("${assetUrl(portrait)}")` } : { background: m.color || '#6b4a2b' }}>
                     {s.level != null && <span className="npc-mini-lvl">Lv {s.level}</span>}
                     {s.ac != null && <span className="npc-mini-ac">🛡 {s.ac}</span>}
+                    {hidden && <span className="npc-mini-hide" title="Hidden from the crew">🎭</span>}
                     {cond && <span className="npc-mini-flag" title={cond}>⛓</span>}
                   </div>
                   <div className="npc-mini-body">
