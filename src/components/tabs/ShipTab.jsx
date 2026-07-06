@@ -29,6 +29,52 @@ const DEFAULT_UPGRADES = [
   { id: 'quarters', name: 'Expanded Quarters', desc: 'Sling extra hammocks below decks.', cost: 200, stat: 'crewMax', amount: 1, installed: false },
   { id: 'cannon', name: 'Enhanced Cannons', desc: 'Bored and trued barrels — steadier fire.', cost: 250, stat: 'cannonHit', amount: 1, installed: false },
 ]
+// A plain-text display of a pasted image URL can be arbitrarily long with no
+// natural break points, which can force horizontal overflow no matter how the
+// surrounding layout is constrained. An <input> doesn't have that problem —
+// its box respects its CSS width regardless of the value's length — so we
+// show a short fixed label instead of the raw URL when not editing.
+function ImageUrlField({ value, onCommit }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="btn small ghost"
+        style={{ marginTop: 8 }}
+        onClick={() => { setDraft(value || ''); setEditing(true) }}
+      >
+        🔗 {value ? 'Change image URL' : 'Set image URL'}
+      </button>
+    )
+  }
+
+  const commit = () => {
+    setEditing(false)
+    if (draft !== value) onCommit(draft)
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <label className="eyebrow">Ship image URL</label>
+      <input
+        className="input"
+        autoFocus
+        value={draft}
+        placeholder="paste an image link"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') { setDraft(value || ''); setEditing(false) }
+        }}
+      />
+    </div>
+  )
+}
+
 const statLabel = (v) => STAT_OPTS.find((o) => o.v === v)?.label || v
 const effectLabel = (u) => `${Number(u.amount) >= 0 ? '+' : ''}${u.amount} ${statLabel(u.stat)}`
 // Return the ship_data patch for applying `amount` of `stat` (negate to reverse).
@@ -120,10 +166,7 @@ export default function ShipTab() {
           {!ship.image_url && <span className="muted center">⛵<br />Add a portrait of the ship</span>}
         </div>
         {canEdit && (
-          <div style={{ marginTop: 8 }}>
-            <label className="eyebrow">Ship image URL</label>
-            <Editable className="truncate" value={ship.image_url} placeholder="paste an image link" onCommit={(v) => patchSingleton('ship', { image_url: v })} />
-          </div>
+          <ImageUrlField value={ship.image_url} onCommit={(v) => patchSingleton('ship', { image_url: v })} />
         )}
         <h2 className="section-title" style={{ marginTop: 14 }}>
           <Editable value={ship.name} onCommit={(v) => patchSingleton('ship', { name: v })} />
@@ -144,7 +187,7 @@ export default function ShipTab() {
           </div>
         </div>
 
-        <div className="sb-combat" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="sb-combat">
           <div className="sb-stat">
             <div className="sb-stat-num">{canEdit ? <input className="input sb-hp-input" type="number" value={sd.ac ?? ''} onChange={(e) => setSd({ ac: Number(e.target.value) })} /> : sd.ac}</div>
             <div className="sb-stat-lbl">Armor</div>
@@ -175,7 +218,7 @@ export default function ShipTab() {
           <div className="sb-stat"><div className="sb-stat-num" style={pax > paxMax ? { color: 'var(--wax-red)' } : undefined}>{pax} <span className="muted" style={{ fontSize: 15 }}>/ {paxMax}</span></div><div className="sb-stat-lbl">Passengers</div></div>
         </div>
 
-        <div className="sb-abilities" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="sb-abilities">
           {ABILS.map((ab) => (
             <div className="sb-abil" key={ab}>
               <div className="sb-abil-abbr">{ab}</div>
@@ -271,11 +314,11 @@ export default function ShipTab() {
 
                   <div className="row-between" style={{ marginTop: 8, alignItems: 'center' }}>
                     {canEdit && !u.installed ? (
-                      <span className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                      <span className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
                         <span className="muted">effect</span>
-                        <input className="input" type="number" style={{ width: 64 }} value={u.amount}
+                        <input className="input" type="number" style={{ width: 64, maxWidth: '100%', minWidth: 0 }} value={u.amount}
                           onChange={(e) => patchUpgrade(u.id, { amount: Number(e.target.value) })} />
-                        <select className="select" style={{ width: 170 }} value={u.stat}
+                        <select className="select" style={{ width: 170, maxWidth: '100%', minWidth: 0 }} value={u.stat}
                           onChange={(e) => patchUpgrade(u.id, { stat: e.target.value })}>
                           {STAT_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                         </select>
