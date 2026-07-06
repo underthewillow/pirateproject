@@ -29,7 +29,10 @@ export default function CrewTab() {
   const addCrew = async () => {
     const name = prompt('New crew member name')
     if (!name) return
-    const member = await addItem('crew', { name, location: 'available', sort_order: crew.length + 1 })
+    // New characters start hidden from the crew so the DM can flesh them out
+    // and reveal them deliberately. Toggle "Hidden from crew" off in the sheet
+    // (or hit "Reveal to crew") when they should appear.
+    const member = await addItem('crew', { name, location: 'available', sort_order: crew.length + 1, stats: { hidden: true } })
     setOpenId(member.id)
   }
 

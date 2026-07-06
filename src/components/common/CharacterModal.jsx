@@ -39,6 +39,11 @@ export default function CharacterModal({ member, onClose }) {
   const demote = () => { if (rkIdx > 0) setStats({ ...stats, rank: RANK_KEYS[rkIdx - 1] }) }
   const promoteLabel = rk === 'passenger' ? 'Sign on as recruit' : 'Ink the Black Knot ⚓'
 
+  // DM staging: hidden characters are invisible to the crew until revealed.
+  const hidden = !!member.stats?.hidden
+  const reveal = () => { const n = { ...stats }; delete n.hidden; setStats(n) }
+  const conceal = () => setStats({ ...stats, hidden: true })
+
   // Non-ability stats (Race, Class, …) for the general list; abilities and the
   // reserved provision fields get their own controls.
   const generalStats = Object.entries(stats).filter(
@@ -88,6 +93,13 @@ export default function CharacterModal({ member, onClose }) {
 
       {member.stats?.condition && (
         <div className="condition-banner">⛓ {member.stats.condition}</div>
+      )}
+
+      {hidden && (
+        <div className="hidden-banner">
+          <span>🎭 <strong>Hidden from the crew.</strong> Only the DM can see this character until you reveal them.</span>
+          {canEdit && <button className="btn small brass" onClick={reveal}>Reveal to crew</button>}
+        </div>
       )}
 
       <hr className="rule" />
@@ -306,6 +318,14 @@ export default function CharacterModal({ member, onClose }) {
                 onChange={(e) => patchItem('crew', member.id, { is_pc: e.target.checked })}
               />
               Player character
+            </label>
+            <label className="flex gap-sm" style={{ alignItems: 'center' }} title="Hidden characters are invisible to the crew until revealed">
+              <input
+                type="checkbox"
+                checked={hidden}
+                onChange={(e) => (e.target.checked ? conceal() : reveal())}
+              />
+              🎭 Hidden from crew
             </label>
             <span className="flex gap-sm" style={{ alignItems: 'center' }}>
               <span className="muted">token colour</span>

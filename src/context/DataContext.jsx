@@ -288,9 +288,20 @@ export function DataProvider({ children }) {
   // canEdit / isDM are now driven by AuthContext (derived from the logged-in
   // user's roles) via these setters, rather than by a standalone passphrase.
 
+  // DM-staged characters: any crew member flagged stats.hidden is concealed
+  // from everyone but the DM/admin. This lets the DM create an NPC ahead of
+  // time and reveal them to the crew on their own timing. Mutations still act
+  // on data.crew by id, and internal callbacks read dataRef.current.crew, so
+  // only the *exposed* list is filtered.
+  const visibleCrew = useMemo(
+    () => (isDM ? data.crew : data.crew.filter((c) => !c?.stats?.hidden)),
+    [data.crew, isDM]
+  )
+
   const value = useMemo(
     () => ({
       ...data,
+      crew: visibleCrew,
       loading,
       error,
       canEdit,
@@ -310,7 +321,7 @@ export function DataProvider({ children }) {
       patchSingleton,
       setSetting,
     }),
-    [data, loading, error, canEdit, isDM, load, addItem, patchItem, removeItem, addRole, removeRole, addUserRole, removeUserRole, setLinkedCrewIds, upsertAppUser, patchSingleton, setSetting]
+    [data, visibleCrew, loading, error, canEdit, isDM, load, addItem, patchItem, removeItem, addRole, removeRole, addUserRole, removeUserRole, setLinkedCrewIds, upsertAppUser, patchSingleton, setSetting]
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
