@@ -263,6 +263,7 @@ body {
   border-radius: 4px;
   padding: 6px 9px;
   width: 100%;
+  box-sizing: border-box;
 }
 .textarea { min-height: 70px; resize: vertical; }
 .input:focus, .textarea:focus, .select:focus {
@@ -680,7 +681,8 @@ body {
   background: rgba(255,250,235,0.3); border: 1px solid var(--parchment-edge);
 }
 .ability-abbr { font-family: var(--font-ui); font-weight: 600; font-size: 13px; letter-spacing: 1px; }
-.ability-input { text-align: center; padding: 3px; margin-top: 2px; }
+.ability-input { width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; text-align: center; padding: 3px; margin-top: 2px; -moz-appearance: textfield; }
+.ability-input::-webkit-outer-spin-button, .ability-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .ability-score { font-family: var(--font-display); font-size: 22px; }
 .ability-mod {
   font-family: var(--font-sc); color: var(--ink-faded); font-size: 14px; margin-top: 2px;
@@ -718,19 +720,21 @@ body {
 .sb-latest.crit .sb-latest-total { color: #2e7a3a; }
 .sb-latest.fumble .sb-latest-total { color: var(--wax-red); }
 
-.sb-combat, .sb-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 14px; }
-.sb-stat { text-align: center; padding: 8px 4px; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); }
+.sb-combat, .sb-abilities { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.sb-stat { text-align: center; padding: 8px 4px; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); min-width: 0; }
 .sb-stat-num { font-family: var(--font-display); font-size: 22px; line-height: 1.15; }
 .sb-stat-lbl { font-family: var(--font-sc); font-size: 11px; letter-spacing: 0.5px; color: var(--ink-faded); text-transform: uppercase; margin-top: 2px; }
-.sb-hp-input { width: 54px; text-align: center; padding: 2px; font-family: var(--font-display); font-size: 18px; }
-.sb-hp-btns { display: flex; gap: 4px; justify-content: center; margin-top: 5px; }
+.sb-hp-input { width: 100%; max-width: 54px; min-width: 0; box-sizing: border-box; text-align: center; padding: 2px; font-family: var(--font-display); font-size: 18px; -moz-appearance: textfield; }
+.sb-hp-input::-webkit-outer-spin-button, .sb-hp-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sb-hp-btns { display: flex; gap: 4px; justify-content: center; margin-top: 5px; padding: 0 6px; }
+.sb-hp-btns .btn { padding: 3px 6px; font-size: 11px; }
 
 .sb-click { cursor: pointer; font-family: inherit; color: var(--ink); transition: filter 0.1s, transform 0.05s; }
 button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-edge); background: rgba(255,250,235,0.3); }
 .sb-click:hover { filter: brightness(1.08); }
 .sb-click:active { transform: translateY(1px); }
 
-.sb-abil { text-align: center; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); padding: 6px 3px; }
+.sb-abil { text-align: center; border: 1px solid var(--parchment-edge); border-radius: var(--radius); background: rgba(255,250,235,0.3); padding: 6px 3px; min-width: 0; }
 .sb-abil-abbr { font-family: var(--font-ui); font-weight: 600; letter-spacing: 1px; font-size: 13px; }
 .sb-abil-mod { display: block; width: 100%; font-family: var(--font-display); font-size: 24px; border: none; background: none; cursor: pointer; color: var(--ink); }
 .sb-abil-mod:hover { color: var(--brass); }
@@ -867,9 +871,11 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   .ability-grid { grid-template-columns: repeat(3, 1fr); }
   .portrait-frame img { max-height: 260px; }
   /* Stat block: collapse the dense grids so nothing overflows/overlaps */
-  .sb-combat { grid-template-columns: repeat(3, 1fr); }
-  .sb-abilities { grid-template-columns: repeat(3, 1fr); }
+  .sb-combat { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sb-abilities { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sb-skills { grid-template-columns: 1fr; }
+  .sb-atk-btn { min-width: 0; }
+  .sb-attack { grid-template-columns: minmax(0, 1fr) auto auto; }
   .sb-stat-num { font-size: 20px; }
   .sb-abil-mod { font-size: 22px; }
   .quest { transform: none !important; }
@@ -881,7 +887,7 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   .modal p { margin: 6px 0; }
 }
 @media (max-width: 380px) {
-  .sb-combat, .sb-abilities { grid-template-columns: repeat(2, 1fr); }
+  .sb-combat, .sb-abilities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 420px) {

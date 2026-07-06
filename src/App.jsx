@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useData } from './context/DataContext'
 import { useAppAuth } from './context/AuthContext'
 import { TABS } from './config/tabs'
@@ -6,12 +6,32 @@ import LoginPage from './components/LoginPage'
 import SettingsPage from './components/SettingsPage'
 import HamburgerMenu from './components/common/HamburgerMenu'
 
+// Remembers which tab/view was open across reloads — a plain page refresh
+// (or a mobile browser reloading a backgrounded tab) would otherwise always
+// dump you back to Home, regardless of how live the data sync feels.
+const NAV_KEY = 'pcl_nav'
+function loadNav() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAV_KEY))
+    return {
+      active: TABS.some((t) => t.key === saved?.active) ? saved.active : 'home',
+      view: saved?.view === 'settings' ? 'settings' : 'app',
+    }
+  } catch {
+    return { active: 'home', view: 'app' }
+  }
+}
+
 export default function App() {
   const { loading, error, ship, canEdit } = useData()
   const { identity, authReady } = useAppAuth()
-  const [active, setActive] = useState('home')
-  const [view, setView] = useState('app')
+  const [active, setActive] = useState(() => loadNav().active)
+  const [view, setView] = useState(() => loadNav().view)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(NAV_KEY, JSON.stringify({ active, view }))
+  }, [active, view])
 
   const ActiveTab = TABS.find((t) => t.key === active)?.component
 
