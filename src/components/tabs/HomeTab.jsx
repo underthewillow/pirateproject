@@ -82,11 +82,11 @@ export default function HomeTab({ onNavigate }) {
   return (
     <div className="dash">
       <div className="dash-hero">
-        <div className="dash-hero-id">
+        <button className="dash-hero-id" onClick={() => go('ship')} title="Open the ship">
           <div className="eyebrow">Captain's Log</div>
           <h2 className="section-title" style={{ margin: '2px 0 2px' }}>{ship?.name || 'The Ship'}</h2>
           <div className="muted" style={{ fontStyle: 'italic' }}>{ship?.tagline || 'Fair winds and full sails.'}</div>
-        </div>
+        </button>
         <div className="dash-hero-right">
           <button className="dash-treasure" onClick={() => go('funds')} title="Open the ledger">
             <span className="gp-coin" />
@@ -97,26 +97,11 @@ export default function HomeTab({ onNavigate }) {
             </span>
           </button>
           <div className="dash-hero-stats">
-            <div className="dash-hero-stat"><div className="n">{pcs.length}</div><div className="l">crew of note</div></div>
-            <div className="dash-hero-stat"><div className="n">{aboard}</div><div className="l">hands aboard</div></div>
-            <div className="dash-hero-stat"><div className="n">{activeQuests.length}</div><div className="l">active quests</div></div>
+            <button className="dash-hero-stat" onClick={() => go('crew')} title="Open the crew roster"><div className="n">{pcs.length}</div><div className="l">crew of note</div></button>
+            <button className="dash-hero-stat" onClick={() => go('crew')} title="Open the crew roster"><div className="n">{aboard}</div><div className="l">hands aboard</div></button>
+            <button className="dash-hero-stat" onClick={() => go('quests')} title="Open the posterboard"><div className="n">{activeQuests.length}</div><div className="l">active quests</div></button>
           </div>
         </div>
-      </div>
-
-      {/* Needs attention */}
-      <div className="dash-alerts">
-        {alerts.length === 0 ? (
-          <div className="dash-alert calm">⚓ All's well aboard — fair winds and a sound hull.</div>
-        ) : (
-          alerts.map((a, i) => (
-            <button key={i} className={`dash-alert ${a.level}`} onClick={() => openAlert(a)}>
-              <span className="dash-alert-ic">{a.icon}</span>
-              <span>{a.text}</span>
-              <span className="dash-alert-go">›</span>
-            </button>
-          ))
-        )}
       </div>
 
       {/* RPG party panel */}
@@ -230,6 +215,22 @@ export default function HomeTab({ onNavigate }) {
           <div className="dash-card-num" style={{ fontSize: 20, fontFamily: 'var(--font-display)' }}>{latestEntry ? latestEntry.title : 'No entries yet'}</div>
           <div className="dash-card-sub muted">{latestEntry ? `Latest of ${journal.length} · Session ${latestEntry.session_no ?? '—'}` : 'The tale begins soon.'}</div>
         </button>
+      </div>
+
+      {/* Needs attention — moved below the roster & summary so the log leads with the crew */}
+      <div className="dash-sec-title">Needs Attention</div>
+      <div className="dash-alerts">
+        {alerts.length === 0 ? (
+          <div className="dash-alert calm">⚓ All's well aboard — fair winds and a sound hull.</div>
+        ) : (
+          alerts.map((a, i) => (
+            <button key={i} className={`dash-alert ${a.level}`} onClick={() => openAlert(a)}>
+              <span className="dash-alert-ic">{a.icon}</span>
+              <span>{a.text}</span>
+              <span className="dash-alert-go">›</span>
+            </button>
+          ))
+        )}
       </div>
 
       {!canEdit && <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>You'll need admin or DM access to edit any of these. Tap a card to dive into that section.</p>}
