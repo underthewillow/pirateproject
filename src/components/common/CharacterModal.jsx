@@ -6,6 +6,7 @@ import Modal from './Modal'
 import DiceRoller, { abilityMod } from './DiceRoller'
 import StatBlock from './StatBlock'
 import NpcStatBlock from './NpcStatBlock'
+import { RANK_KEYS, rankKey, rankLabel } from '../../lib/ranks'
 
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
@@ -20,7 +21,7 @@ const ABIL_LOOKUP = new Set([
   'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma',
 ])
 // Kept in the stats blob but surfaced with their own controls, not the free-form list.
-const RESERVED_STATS = new Set(['rations_per_day', 'drinks_per_day'])
+const RESERVED_STATS = new Set(['rations_per_day', 'drinks_per_day', 'rank', 'condition'])
 const DEFAULT_PER_DAY = 1
 
 export default function CharacterModal({ member, onClose }) {
@@ -30,6 +31,13 @@ export default function CharacterModal({ member, onClose }) {
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
   const setStats = (next) => patchItem('crew', member.id, { stats: next })
+
+  // Crew standing (rank) + condition. Anyone may promote; only the DM demotes.
+  const rk = rankKey(member)
+  const rkIdx = RANK_KEYS.indexOf(rk)
+  const promote = () => { if (rkIdx < RANK_KEYS.length - 1) setStats({ ...stats, rank: RANK_KEYS[rkIdx + 1] }) }
+  const demote = () => { if (rkIdx > 0) setStats({ ...stats, rank: RANK_KEYS[rkIdx - 1] }) }
+  const promoteLabel = rk === 'passenger' ? 'Sign on as recruit' : 'Ink the Black Knot ⚓'
 
   // Non-ability stats (Race, Class, …) for the general list; abilities and the
   // reserved provision fields get their own controls.
@@ -78,7 +86,31 @@ export default function CharacterModal({ member, onClose }) {
         </a>
       )}
 
+      {member.stats?.condition && (
+        <div className="condition-banner">⛓ {member.stats.condition}</div>
+      )}
+
       <hr className="rule" />
+
+      {!member.is_pc && (
+        <div style={{ marginBottom: 14 }}>
+          <label className="eyebrow">Standing aboard</label>
+          <div className="flex wrap gap-sm" style={{ alignItems: 'center', marginTop: 6 }}>
+            <span className={`npc-rank big rank-${rk}`}>{rankLabel(rk)}</span>
+            {rk !== 'crew' && <button className="btn small brass" onClick={promote}>{promoteLabel}</button>}
+            {canEdit && rk !== 'passenger' && <button className="btn small ghost" onClick={demote} title="Lower standing">▾ demote</button>}
+          </div>
+          {rk === 'recruit' && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Ink the Black Knot to make them full crew — the tattoo is the initiation.</p>}
+          <div style={{ marginTop: 10 }}>
+            <label className="eyebrow">Condition</label>
+            <Editable
+              value={member.stats?.condition}
+              placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
+              onCommit={(v) => setStats({ ...stats, condition: v })}
+            />
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="eyebrow">Whereabouts</label>

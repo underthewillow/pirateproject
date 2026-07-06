@@ -5,6 +5,7 @@ import { AppAuthProvider } from './context/AuthContext'
 import { RollProvider } from './context/RollContext'
 import App from './App'
 import './styles/theme.css'
+import './styles/additions.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
