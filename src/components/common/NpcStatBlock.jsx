@@ -13,6 +13,23 @@ const SKILL_ABIL = {
 }
 const ALL_SKILLS = Object.keys(SKILL_ABIL)
 
+// A row of tick-boxes for limited-use abilities (e.g. "3 per combat"). Anyone
+// can tick/untick them to track uses in the moment — it's not gated by editing.
+function UsesTicker({ max, used, onChange }) {
+  const m = Number(max) || 0
+  if (m < 1) return null
+  const u = Math.max(0, Math.min(Number(used) || 0, m))
+  const clickPip = (i) => onChange(i + 1 === u ? i : i + 1) // tally-style toggle
+  return (
+    <span className="uses-ticker" title={`${m - u} of ${m} left`} onClick={(e) => e.stopPropagation()}>
+      {Array.from({ length: m }, (_, i) => (
+        <button key={i} className={`use-pip ${i < u ? 'spent' : ''}`} onClick={() => clickPip(i)} aria-label={`use ${i + 1}`} />
+      ))}
+      {u > 0 && <button className="use-reset" title="Reset uses" onClick={() => onChange(0)}>↺</button>}
+    </span>
+  )
+}
+
 // Editable, rollable stat block for NPC crew (distinct from the D&D-Beyond PC
 // sheet). Everything is editable when the log is unlocked (admin / DM).
 export default function NpcStatBlock({ member }) {
@@ -45,6 +62,11 @@ export default function NpcStatBlock({ member }) {
   const addTrait = () => setSheet({ traits: [...traits, { n: 'New Ability', d: '', roll: '' }] })
   const rmTrait = (i) => setSheet({ traits: traits.filter((_, j) => j !== i) })
   const toggleSave = (ab) => setSheet({ saves: saves.includes(ab) ? saves.filter((x) => x !== ab) : [...saves, ab] })
+  const resetAllUses = () => setSheet({
+    attacks: attacks.map((a) => (a.uses ? { ...a, used: 0 } : a)),
+    traits: traits.map((t) => (t.uses ? { ...t, used: 0 } : t)),
+  })
+  const hasUses = attacks.some((a) => a.uses) || traits.some((t) => t.uses)
   const addSkill = (name) => { if (name && !skills.includes(name)) setSheet({ skills: [...skills, name] }) }
   const rmSkill = (name) => setSheet({ skills: skills.filter((x) => x !== name) })
 
@@ -167,10 +189,12 @@ export default function NpcStatBlock({ member }) {
               <button className="btn small sb-atk-btn" onClick={() => d20(`${a.n} — to hit`, Number(a.toHit))} title="Roll to hit">{fmt(Number(a.toHit) || 0)} hit</button>
             )}
             {a.dmg && <button className="btn small brass sb-atk-btn" onClick={() => rollExpr(`${a.n} — damage`, a.dmg)} title="Roll damage">{a.dmg}</button>}
+            {a.uses > 0 && <UsesTicker max={a.uses} used={a.used} onChange={(v) => patchAttack(i, { used: v })} />}
             {canEdit && (
               <div className="npc-atk-edit">
                 <label>hit<input className="input npc-mini" type="number" value={a.toHit ?? ''} placeholder="—" onChange={(e) => patchAttack(i, { toHit: e.target.value === '' ? '' : Number(e.target.value) })} /></label>
                 <label>dmg<input className="input npc-dmg" value={a.dmg ?? ''} placeholder="1d8+2" onChange={(e) => patchAttack(i, { dmg: e.target.value })} /></label>
+                <label>uses<input className="input npc-mini" type="number" min="0" value={a.uses ?? ''} placeholder="∞" onChange={(e) => patchAttack(i, { uses: e.target.value === '' ? 0 : Number(e.target.value) })} /></label>
                 <button className="btn small danger" onClick={() => rmAttack(i)}>✕</button>
               </div>
             )}
@@ -181,7 +205,10 @@ export default function NpcStatBlock({ member }) {
       {/* special abilities */}
       <div className="row-between">
         <div className="sb-section-title" style={{ margin: '16px 0 8px' }}>Special Abilities</div>
-        {canEdit && <button className="btn small ghost" onClick={addTrait}>+ ability</button>}
+        <span className="flex gap-sm">
+          {hasUses && <button className="btn small ghost" onClick={resetAllUses} title="Reset all per-combat uses">↺ reset uses</button>}
+          {canEdit && <button className="btn small ghost" onClick={addTrait}>+ ability</button>}
+        </span>
       </div>
       <div className="list">
         {traits.length === 0 && <span className="muted">No special abilities.</span>}
@@ -190,6 +217,7 @@ export default function NpcStatBlock({ member }) {
             <div className="row-between" style={{ alignItems: 'flex-start' }}>
               <strong style={{ fontFamily: 'var(--font-ui)' }}>{canEdit ? <Editable value={t.n} onCommit={(v) => patchTrait(i, { n: v })} /> : t.n}</strong>
               <span className="flex gap-sm" style={{ alignItems: 'center' }}>
+                {t.uses > 0 && <UsesTicker max={t.uses} used={t.used} onChange={(v) => patchTrait(i, { used: v })} />}
                 {t.roll && <button className="btn small brass" onClick={() => rollExpr(t.n, t.roll)} title="Roll">{t.roll}</button>}
                 {canEdit && <button className="btn small danger" onClick={() => rmTrait(i)}>✕</button>}
               </span>
@@ -198,7 +226,10 @@ export default function NpcStatBlock({ member }) {
               {canEdit ? <Editable multiline value={t.d} placeholder="describe the ability…" onCommit={(v) => patchTrait(i, { d: v })} /> : t.d}
             </div>
             {canEdit && (
-              <label className="npc-roll-field">roll (optional) <input className="input npc-dmg" value={t.roll ?? ''} placeholder="e.g. 2d6" onChange={(e) => patchTrait(i, { roll: e.target.value })} /></label>
+              <div className="npc-trait-edit">
+                <label className="npc-roll-field">roll (optional) <input className="input npc-dmg" value={t.roll ?? ''} placeholder="e.g. 2d6" onChange={(e) => patchTrait(i, { roll: e.target.value })} /></label>
+                <label className="npc-roll-field">uses/combat <input className="input npc-mini" type="number" min="0" value={t.uses ?? ''} placeholder="∞" onChange={(e) => patchTrait(i, { uses: e.target.value === '' ? 0 : Number(e.target.value) })} /></label>
+              </div>
             )}
           </div>
         ))}
