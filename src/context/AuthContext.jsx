@@ -1,6 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { AuthProvider as OidcProvider, useAuth as useOidc } from 'react-oidc-context'
+import { WebStorageStateStore } from 'oidc-client-ts'
 import { useData } from './DataContext'
+
+// oidc-client-ts defaults to sessionStorage, which doesn't survive a mobile
+// browser actually closing/reloading the tab (common when backgrounded) —
+// localStorage keeps the session across that.
+const oidcUserStore = new WebStorageStateStore({ store: window.localStorage })
 
 const AppAuthContext = createContext(null)
 export const useAppAuth = () => useContext(AppAuthContext)
@@ -153,7 +159,8 @@ export function AppAuthProvider({ children }) {
       authority={authority || 'https://unconfigured.invalid'}
       client_id={clientId || 'unconfigured'}
       redirect_uri={redirectUri}
-      scope="openid profile email"
+      scope="openid profile email offline_access"
+      userStore={oidcUserStore}
       automaticSilentRenew={oidcConfigured}
       onSigninCallback={() => {
         window.history.replaceState({}, document.title, window.location.pathname)
