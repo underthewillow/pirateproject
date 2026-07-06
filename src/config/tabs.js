@@ -16,7 +16,7 @@ export const TABS = [
   { key: 'crew', label: 'The Crew', icon: '☠', component: CrewTab },
   { key: 'roles', label: 'Crew Roles', icon: '🎖', component: RolesTab },
   { key: 'inventory', label: 'Inventory', icon: '📦', component: InventoryTab },
-  { key: 'funds', label: 'Funds & Ledger', icon: '🪙', component: FundsTab },
+  { key: 'funds', label: 'Funds & Ledger', icon: '💰', component: FundsTab },
   { key: 'map', label: 'The Map', icon: '🗺', component: MapTab },
   { key: 'quests', label: 'Posterboard', icon: '📜', component: QuestsTab },
   { key: 'journal', label: 'Journal', icon: '📖', component: JournalTab },
