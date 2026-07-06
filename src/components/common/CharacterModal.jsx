@@ -5,6 +5,7 @@ import Editable from './Editable'
 import Modal from './Modal'
 import DiceRoller, { abilityMod } from './DiceRoller'
 import StatBlock from './StatBlock'
+import NpcStatBlock from './NpcStatBlock'
 
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
@@ -169,7 +170,7 @@ export default function CharacterModal({ member, onClose }) {
       </div>
 
       {member.sheet_data ? (
-        <StatBlock member={member} />
+        member.is_pc ? <StatBlock member={member} /> : <NpcStatBlock member={member} />
       ) : (
         <>
           {(member.is_pc || ABILITIES.some((a) => abilityValue(a) !== '')) && (
