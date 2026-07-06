@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { assetUrl } from '../../lib/asset'
-import Avatar from '../common/Avatar'
 import CharacterModal from '../common/CharacterModal'
+import { rankKey, rankLabel } from '../../lib/ranks'
 
 const hpColor = (pct) => (pct > 0.5 ? '#3a7a4a' : pct > 0.25 ? '#c08a2c' : '#a3352f')
 const num = (v) => Number(v) || 0
@@ -56,7 +56,10 @@ export default function HomeTab({ onNavigate }) {
     alerts.push({ level: shipPct <= 0.25 ? 'crit' : 'warn', icon: '⚓', tab: 'ship', text: `The hull is ${shipPct <= 0.25 ? 'nearly wrecked' : 'battered'} — ${shipHp}/${shipHpMax} HP. Put in for repairs.` })
   if (num(sd.speedCurrent) < num(sd.speedMax))
     alerts.push({ level: 'warn', icon: '⛵', tab: 'ship', text: `Sails are torn — speed ${sd.speedCurrent}/${sd.speedMax}. Mend them at a shipyard.` })
-  pcs.forEach((m) => {
+  // wounded or incapacitated crew — players and NPCs alike
+  crew.forEach((m) => {
+    const cond = m.stats?.condition
+    if (cond) { alerts.push({ level: 'crit', icon: '⛓', tab: 'crew', mid: m.id, text: `${m.name} is incapacitated — ${cond}.` }); return }
     const s = m.sheet_data; if (!s) return
     const cur = num(s.hpCurrent ?? s.maxHp), mx = num(s.maxHp) || 1
     const pct = cur / mx
@@ -143,16 +146,36 @@ export default function HomeTab({ onNavigate }) {
       {npcs.length > 0 && (
         <>
           <div className="dash-sec-title">Ship's Company <span className="muted">— {npcs.length} hands</span></div>
-          <div className="dash-hands">
-            {npcs.map((m) => (
-              <button key={m.id} className="dash-hand" onClick={() => setOpenId(m.id)} title={m.name}>
-                <Avatar member={m} size="sm" />
-                <div className="dash-hand-txt">
-                  <div className="dash-hand-name">{m.name}</div>
-                  <div className="dash-hand-role muted">{(Array.isArray(m.roles) && m.roles[0]) || m.title || 'deckhand'}</div>
-                </div>
-              </button>
-            ))}
+          <div className="npc-fleet">
+            {npcs.map((m) => {
+              const s = m.sheet_data || {}
+              const mx = num(s.maxHp)
+              const cur = num(s.hpCurrent ?? s.maxHp)
+              const pct = mx ? Math.max(0, Math.min(1, cur / mx)) : 1
+              const cond = m.stats?.condition
+              const rk = rankKey(m)
+              const portrait = m.image_url || m.portrait_url
+              return (
+                <button key={m.id} className={`npc-mini ${cond ? 'downed' : (mx && pct <= 0.5 ? 'hurt' : '')}`} onClick={() => setOpenId(m.id)} title={cond ? `${m.name} — ${cond}` : m.name}>
+                  <div className="npc-mini-portrait" style={portrait ? { backgroundImage: `url("${assetUrl(portrait)}")` } : { background: m.color || '#6b4a2b' }}>
+                    {s.level != null && <span className="npc-mini-lvl">Lv {s.level}</span>}
+                    {s.ac != null && <span className="npc-mini-ac">🛡 {s.ac}</span>}
+                    {cond && <span className="npc-mini-flag" title={cond}>⛓</span>}
+                  </div>
+                  <div className="npc-mini-body">
+                    <div className="npc-mini-name">{m.name}</div>
+                    <div className={`npc-rank rank-${rk}`}>{rankLabel(rk)}</div>
+                    {mx > 0 && !cond && (
+                      <>
+                        <div className="npc-mini-hpbar"><span style={{ width: `${pct * 100}%`, background: hpColor(pct) }} /></div>
+                        <div className="npc-mini-hp" style={{ color: hpColor(pct) }}>{cur} <span className="muted">/ {mx}</span></div>
+                      </>
+                    )}
+                    {cond && <div className="npc-mini-cond">⛓ {cond}</div>}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </>
       )}

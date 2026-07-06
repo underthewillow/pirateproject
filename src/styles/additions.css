@@ -1,0 +1,48 @@
+/* ============================================================
+   Additions layered on top of theme.css (kept separate so the
+   base stylesheet is never rewritten).
+   ============================================================ */
+
+/* ---- Helm: NPC mini stat cards (Ship's Company) ---- */
+.npc-fleet { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .npc-fleet { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); } }
+.npc-mini {
+  display: flex; flex-direction: column; text-align: left; cursor: pointer; overflow: hidden;
+  border-radius: 9px; padding: 0; background: rgba(255,250,235,0.45);
+  border: 1px solid var(--parchment-edge); box-shadow: 0 2px 6px rgba(60,36,12,0.25);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.npc-mini:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(40,23,12,0.35); }
+.npc-mini.hurt { border-color: #a3352f; }
+.npc-mini.downed { filter: grayscale(0.55); border-color: var(--wax-red); box-shadow: inset 0 0 0 2px rgba(116,36,32,0.4); }
+.npc-mini-portrait {
+  position: relative; width: 100%; padding-top: 100%;
+  background-size: cover; background-position: center top;
+  border-bottom: 1px solid var(--parchment-edge);
+}
+.npc-mini-lvl { position: absolute; top: 4px; left: 4px; font-family: var(--font-display); font-size: 10.5px; padding: 1px 6px; border-radius: 9px; color: #f7ecd2; background: rgba(30,18,8,0.82); border: 1px solid var(--brass-light); }
+.npc-mini-ac { position: absolute; top: 4px; right: 4px; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 9px; color: #f7ecd2; background: rgba(30,40,70,0.82); border: 1px solid #6f7fae; }
+.npc-mini-flag { position: absolute; bottom: 4px; right: 5px; font-size: 17px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8)); }
+.npc-mini-body { padding: 7px 9px 9px; }
+.npc-mini-name { font-family: var(--font-display); font-size: 15px; color: var(--ink); line-height: 1.05; }
+.npc-mini-hpbar { height: 7px; border-radius: 4px; background: rgba(40,23,12,0.22); overflow: hidden; border: 1px solid rgba(40,23,12,0.3); margin-top: 6px; }
+.npc-mini-hpbar span { display: block; height: 100%; border-radius: 4px 0 0 4px; transition: width 0.3s ease; }
+.npc-mini-hp { font-size: 12px; font-weight: 600; margin-top: 2px; }
+.npc-mini-cond { font-size: 11.5px; color: var(--wax-red); margin-top: 5px; font-style: italic; line-height: 1.2; }
+
+/* ---- crew standing (rank) badges ---- */
+.npc-rank {
+  display: inline-block; margin-top: 4px; font-family: var(--font-ui); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.4px; padding: 1px 8px; border-radius: 9px; border: 1px solid;
+}
+.npc-rank.big { font-size: 13px; padding: 3px 12px; border-radius: 12px; margin-top: 0; }
+.rank-passenger { background: rgba(90,110,130,0.18); border-color: #5a7382; color: #37505e; }
+.rank-recruit { background: rgba(176,141,63,0.20); border-color: var(--brass); color: #6a5220; }
+.rank-crew { background: linear-gradient(160deg, var(--leather-light), var(--leather-dark)); border-color: var(--leather-darker); color: var(--brass-light); }
+
+/* ---- condition banner (character modal) ---- */
+.condition-banner {
+  margin-top: 12px; padding: 8px 12px; border-radius: 6px;
+  background: rgba(116,36,32,0.14); border: 1px solid var(--wax-red);
+  color: var(--ink); font-family: var(--font-ui); font-weight: 600; font-size: 14px;
+}
