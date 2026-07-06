@@ -1,101 +1,65 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
+import { HANDBOOK, DIAGRAMS } from '../../data/handbook'
 
-// Player-facing sailing & naval-combat rules distilled from Limithron's Guide
-// to Naval Combat (DM-only material left out).
-const LESSONS = [
-  {
-    t: 'How Ship Combat Works',
-    c: [
-      'Naval combat plays out on a hex grid — each hex is 50 ft, and our Schooner takes up one to three hexes.',
-      'Every round (about 6 seconds) initiative is re-rolled: each ship rolls a d20 and adds its DEX. Only ships (and lone sea monsters) roll — everyone aboard acts on the ship’s turn.',
-      'At the top of the round the Captain spends the ship’s Action Points to assign what it will do. On the ship’s turn it moves and the crew carry those orders out.',
-      'Most ship actions call for a check (default DC 12). Whoever mans the matching Action Station makes the roll and adds a d4 "Sailing Die" to help.',
-    ],
-  },
-  {
-    t: 'Reading the Ship’s Stats',
-    c: [
-      'STR — the punch of her guns (added to damage). DEX — how nimbly she handles (initiative & coming about). CON — how tough her hull is (hit points).',
-      'CHA is her "Skill" — the quality of the crew and their leadership (used for attack rolls and Full Sail). AC is how hard she is to hit; Speed is how many 50-ft hexes she covers in a turn with fair wind.',
-      'Damage is scaled down 1:5 versus normal creatures — a hit that would deal 5 to a person deals 1 to a ship.',
-    ],
-  },
-  {
-    t: 'Wind & Points of Sail',
-    c: [
-      'Your point of sail is locked in at the start of your turn:',
-      'With the Wind — full speed. Close to the Wind — half speed (minimum 1 hex). In Irons (pointed straight into the wind) — speed 0, though you may still turn once.',
-      'Weatherly: The Salty Regret ignores the Close-to-the-Wind penalty and keeps her full speed — our great advantage in a chase.',
-    ],
-  },
-  {
-    t: 'Moving the Ship',
-    c: [
-      'Move up to your Speed straight forward, and rotate up to twice — each rotation is one hex-face (60°). You may never turn more than once per hex, and you must move at least 1 hex unless In Irons or Anchored.',
-    ],
-  },
-  {
-    t: 'Arc of Fire',
-    c: [
-      'Guns are grouped by side: Fore (bow), Broadside Port, Broadside Starboard, and Aft (stern). Most cannons sit along the sides, so you must maneuver to bring a broadside to bear.',
-      'You may fire each side once per round — so a well-timed turn can rake an enemy with both broadsides across two rounds.',
-    ],
-  },
-  {
-    t: 'Our Weapons',
-    c: [
-      'Cannons — +2 to hit, 1d8+2 damage. Once per round per side, and they take 1 full round to reload.',
-      'Small Arms (muskets & pistols) — +2 to hit, 1d4+2 damage. Once per round per side, with no reload.',
-      'A Broadside shot costs 1 Action Point. A Fore or Aft shot costs 2 and rolls one die-rank lower.',
-    ],
-  },
-  {
-    t: 'Action Stations (your jobs in a fight)',
-    c: [
-      'On your turn you may take one Action Station and add a d4 Sailing Die to its check:',
-      'Captain — assigns the ship’s actions; may Push the Crew (Intimidation/Persuasion) for +1 Action Point now, at the cost of −1 next round.',
-      'Pilot (our Navigator) — steers and rolls DEX to Come About (an extra turn), plus any checks to navigate hazards.',
-      'Lookout — before initiative, rolls the ship’s initiative and may add or subtract their Sailing Die; a ship with a Lookout also gains +1 AC.',
-      'Bosun (our Boatswain) — Raise Morale: either +1 to all the ship’s attacks & checks this turn, or shake off the Stressed condition.',
-      'Gunner (our Gunmaster) — fires the guns using the ship’s Skill + Sailing Die.',
-      'Carpenter — Repairs the hull (recover HP) using Skill + Sailing Die.',
-      'Rigger — goes Full Sail for +1 hex of movement, using Skill + Sailing Die.',
-    ],
-  },
-  {
-    t: 'Ramming',
-    c: [
-      'At the start of your turn the Captain may declare a ram (it costs all Action Points). If you end your movement with a forward face touching another ship, both ships roll their base Hit Die; the rammer adds +1 for every hex it moved this turn. The winner deals a critical hit with its primary weapon.',
-    ],
-  },
-  {
-    t: 'When the Ship is Hurt',
-    c: [
-      'Stressed — below half HP (or too short-crewed), the ship rolls all attacks and checks with Disadvantage. The Bosun’s Raise Morale can clear it.',
-      'Derelict — at 0 HP she stops dead (speed 0) and can only Repair. Every further hit forces a sinking save (d20, 10+ to stay afloat; a critical hit auto-fails). A successful Repair (rolled at Disadvantage) brings her back with 1 HP.',
-    ],
-  },
-  {
-    t: 'Anchoring & Boarding',
-    c: [
-      'Drop Anchor (all Action Points): speed 0 and anchored. Weigh Anchor: back to half speed, no longer anchored. Cut and Run: cut the cable free — half speed now, but she’ll drift once you stop.',
-      'Boarding — once two ships lock together, we switch to normal foot-combat on a 5-ft grid. That’s where the heroes settle it.',
-    ],
-  },
-]
+// Interactive diagram (points-of-sail wheel / arc of fire): the real art with
+// tap-able hotspots that explain each sector.
+function Diagram({ which }) {
+  const d = DIAGRAMS[which]
+  const [active, setActive] = useState(null)
+  if (!d) return null
+  const cap = active != null ? d.spots[active].text : d.caption
+  return (
+    <div className="hb-diagram">
+      <div className="hb-diagram-img">
+        <img src={assetUrl('desk/' + d.img)} alt="" />
+        {d.spots.map((s, i) => (
+          <button
+            key={i}
+            className={`hb-spot ${active === i ? 'on' : ''}`}
+            style={{ left: `${s.x}%`, top: `${s.y}%` }}
+            onMouseEnter={() => setActive(i)}
+            onFocus={() => setActive(i)}
+            onClick={() => setActive(i)}
+            aria-label={s.label}
+          />
+        ))}
+      </div>
+      <div className={`hb-diagram-cap ${active != null ? 'live' : ''}`}>{cap}</div>
+    </div>
+  )
+}
 
 export default function DeskTab() {
-  const { settings, setSetting, canEdit } = useData()
-  const [open, setOpen] = useState(() => new Set())
-  const toggle = (i) => setOpen((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })
+  const { settings, setSetting, canEdit, isDM } = useData()
+  const [open, setOpen] = useState(false)
+  const [idx, setIdx] = useState(0)
+
+  const revealed = Array.isArray(settings?.handbook_revealed) ? settings.handbook_revealed : []
+  const isShown = (id) => revealed.includes(id)
+
+  // DM sees every chapter; the crew see only what's been revealed.
+  const chapters = isDM ? HANDBOOK : HANDBOOK.filter((c) => isShown(c.id))
+  const safeIdx = Math.min(idx, Math.max(0, chapters.length - 1))
+  const ch = chapters[safeIdx]
+
+  const go = (n) => setIdx(() => (n + chapters.length) % chapters.length)
+
+  const toggleReveal = (id) => {
+    const next = isShown(id) ? revealed.filter((r) => r !== id) : [...revealed, id]
+    setSetting('handbook_revealed', next)
+  }
+  const revealAll = () => setSetting('handbook_revealed', HANDBOOK.map((c) => c.id))
+  const hideAll = () => setSetting('handbook_revealed', [])
 
   return (
     <div>
       <h2 className="section-title">Captain Ruby Tooth's Desk</h2>
-      <p className="muted" style={{ marginTop: 0 }}>The log and the lessons — everything a hand needs to sail and fight the ship.</p>
+      <p className="muted" style={{ marginTop: 0 }}>The ship's log, and the captain's handbook of sailing &amp; battle.</p>
 
+      {/* ---- Sailing Log ---- */}
       <div className="sb-section-title">Sailing Log</div>
       <div className="card journal-body" style={{ whiteSpace: 'pre-wrap' }}>
         <Editable
@@ -108,25 +72,109 @@ export default function DeskTab() {
       </div>
       {!canEdit && <p className="muted" style={{ fontSize: 13 }}>You'll need admin or DM access to add to the log.</p>}
 
-      <div className="sb-section-title" style={{ marginTop: 22 }}>Lessons — Sailing &amp; Naval Combat</div>
-      <div className="list">
-        {LESSONS.map((l, i) => {
-          const isOpen = open.has(i)
-          return (
-            <div className="card" key={i}>
-              <button className="row-between sb-click" style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }} onClick={() => toggle(i)}>
-                <strong style={{ fontFamily: 'var(--font-display)', fontSize: 18 }}>{l.t}</strong>
-                <span className="muted">{isOpen ? '▾' : '▸'}</span>
-              </button>
-              {isOpen && (
-                <div style={{ marginTop: 8 }}>
-                  {l.c.map((p, j) => <p key={j} style={{ margin: '0 0 8px' }}>{p}</p>)}
-                </div>
-              )}
-            </div>
-          )
-        })}
+      {/* ---- The Captain's Handbook ---- */}
+      <div className="row-between" style={{ marginTop: 24, alignItems: 'flex-end' }}>
+        <div className="sb-section-title" style={{ margin: 0, border: 'none' }}>The Captain's Handbook</div>
+        {isDM && (
+          <div className="flex gap-sm">
+            <button className="btn small ghost" onClick={revealAll}>Reveal all</button>
+            <button className="btn small ghost" onClick={hideAll}>Hide all</button>
+          </div>
+        )}
       </div>
+      <hr className="rule" style={{ marginTop: 6 }} />
+
+      {isDM && (
+        <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>
+          🧭 DM view — you see every chapter. Use the <strong>reveal</strong> toggle on each to share it with the crew; they only see what you've revealed.
+        </p>
+      )}
+
+      {chapters.length === 0 ? (
+        <div className="card center" style={{ padding: '28px 18px' }}>
+          <div style={{ fontSize: 34, opacity: 0.5 }}>📕</div>
+          <p className="muted" style={{ margin: '8px 0 0' }}>The captain hasn't opened the handbook yet. New lessons will appear here as they're taught.</p>
+        </div>
+      ) : !open ? (
+        // Closed book — a leather-bound cover; click to open
+        <button className="hb-closed" onClick={() => setOpen(true)}>
+          <span className="hb-closed-frame">
+            <span className="hb-closed-emblem">☠</span>
+            <span className="hb-closed-title">The Captain's Handbook</span>
+            <span className="hb-closed-frule" />
+            <span className="hb-closed-sub">Sailing &amp; Naval Combat</span>
+            <span className="hb-closed-count">{chapters.length} chapter{chapters.length === 1 ? '' : 's'}</span>
+            <span className="hb-closed-open">Open the book ›</span>
+          </span>
+        </button>
+      ) : (
+        <div className="handbook">
+          {/* contents rail */}
+          <div className="hb-toc">
+            {chapters.map((c, i) => (
+              <button key={c.id} className={`hb-toc-item ${i === safeIdx ? 'on' : ''}`} onClick={() => setIdx(i)}>
+                <span className="hb-toc-no">{String(i + 1).padStart(2, '0')}</span>
+                <span className="hb-toc-title">{c.title}</span>
+                {isDM && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className={`hb-eye ${isShown(c.id) ? 'shown' : 'hidden'}`}
+                    title={isShown(c.id) ? 'Revealed to crew — click to hide' : 'Hidden from crew — click to reveal'}
+                    onClick={(e) => { e.stopPropagation(); toggleReveal(c.id) }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); toggleReveal(c.id) } }}
+                  >{isShown(c.id) ? '👁' : '🚫'}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* the open spread */}
+          <div className="hb-book">
+            <div className="hb-spread" key={ch.id}>
+              <div className="hb-page hb-left">
+                {ch.diagram
+                  ? <Diagram which={ch.diagram} />
+                  : <img className="hb-illus" src={assetUrl('desk/' + (ch.art || 'ship.jpg'))} alt="" />}
+                <div className="hb-chapno">Chapter {String(safeIdx + 1).padStart(2, '0')} of {String(chapters.length).padStart(2, '0')}</div>
+              </div>
+
+              <div className="hb-page hb-right">
+                {isDM && (
+                  <button className={`hb-reveal ${isShown(ch.id) ? 'shown' : ''}`} onClick={() => toggleReveal(ch.id)}>
+                    {isShown(ch.id) ? '👁 Revealed to crew' : '🚫 Hidden — reveal to crew'}
+                  </button>
+                )}
+                <h3 className="hb-title">{ch.title}</h3>
+                <p className="hb-lead">{ch.lead}</p>
+                <div className="hb-body">
+                  {ch.body.map((b, j) =>
+                    typeof b === 'string'
+                      ? <p key={j}>{b}</p>
+                      : <p key={j} className="hb-def"><strong>{b.t}.</strong> {b.d}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* nav */}
+            <div className="hb-nav">
+              <button className="btn small" onClick={() => go(safeIdx - 1)}>‹ Prev</button>
+              <span className="hb-dots">
+                {chapters.map((c, i) => (
+                  <span key={c.id} className={`hb-dot ${i === safeIdx ? 'on' : ''}`} onClick={() => setIdx(i)} />
+                ))}
+              </span>
+              <button className="btn small" onClick={() => go(safeIdx + 1)}>Next ›</button>
+              <button className="btn small ghost hb-close" onClick={() => setOpen(false)}>Close book</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>
+        Rules digested from <em>Limithron's Guide to Naval Combat</em> (free edition); cover art <em>The Battle of Trafalgar</em>, public domain.
+      </p>
     </div>
   )
 }
