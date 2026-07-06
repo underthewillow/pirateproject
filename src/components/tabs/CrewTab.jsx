@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { useData } from '../../context/DataContext'
 import { Draggable, Droppable } from '../common/Dnd'
-import CrewToken from '../common/CrewToken'
+import CrewCard from '../common/CrewCard'
 import CharacterModal from '../common/CharacterModal'
 
 const ZONES = [
   { id: 'ship', title: 'Aboard the Ship', note: 'Hands currently sailing with us.' },
   { id: 'passenger', title: 'Passengers', note: 'Temporary guests aboard — they can’t stay overnight or long rest on the ship.' },
+  { id: 'met', title: 'The Gangplank', note: 'Newly met souls — not yet crew, passengers, or sent on their way. A place to stage arrivals and hold the undecided.' },
   { id: 'shore', title: 'Ashore', note: 'Off the ship — in port or elsewhere.' },
   { id: 'available', title: 'Available Crew', note: 'Reserve hands. Drag them into a station above.' },
 ]
@@ -60,11 +61,11 @@ export default function CrewTab() {
                   </div>
                 </div>
                 <div className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 10 }}>{z.note}</div>
-                <div className="flex wrap gap-sm">
+                <div className="crew-cards">
                   {members.length === 0 && <span className="role-empty">— empty —</span>}
                   {members.map((m) => (
                     <Draggable key={m.id} id={m.id} data={{ location: m.location }} disabled={!canEdit}>
-                      <CrewToken member={m} onOpen={() => setOpenId(m.id)} />
+                      <CrewCard member={m} onOpen={() => setOpenId(m.id)} />
                     </Draggable>
                   ))}
                 </div>

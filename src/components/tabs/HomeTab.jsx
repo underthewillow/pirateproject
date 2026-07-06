@@ -13,10 +13,14 @@ export default function HomeTab({ onNavigate }) {
   const go = (tab) => onNavigate && onNavigate(tab)
 
   const sd = ship?.ship_data || {}
-  const pcs = crew.filter((c) => c.is_pc)
-  const npcs = crew.filter((c) => !c.is_pc)
-  const aboard = crew.filter((c) => c.location === 'ship').length
-  const pax = crew.filter((c) => c.location === 'passenger').length
+  // The Helm is the "who's actually with us" board: hidden/staged characters
+  // and those off elsewhere (ashore, reserve, on the gangplank) don't count
+  // toward the ship's tallies or clutter the roster.
+  const visible = crew.filter((c) => !c.stats?.hidden)
+  const pcs = visible.filter((c) => c.is_pc)
+  const npcs = visible.filter((c) => !c.is_pc && (c.location === 'ship' || c.location === 'passenger'))
+  const aboard = visible.filter((c) => c.location === 'ship').length
+  const pax = visible.filter((c) => c.location === 'passenger').length
   const crewMax = sd.crewMax ?? 14
   const paxMax = sd.passengerMax ?? 5
 
@@ -24,8 +28,9 @@ export default function HomeTab({ onNavigate }) {
   const shipHp = num(sd.hpCurrent), shipHpMax = num(sd.hpMax) || 1
   const shipPct = Math.max(0, Math.min(1, shipHp / shipHpMax))
 
-  // provisions
-  const mouths = crew.filter((c) => c.location === 'ship' || c.location === 'passenger').length
+  // provisions — only the crew actually aboard draw on the ship's stores;
+  // passengers and other categories aren't counted, nor are hidden/staged souls.
+  const mouths = visible.filter((c) => c.location === 'ship').length
   const totalOf = (kind) => inventory.filter((it) => it.provision === kind)
     .reduce((s, it) => s + num(it.quantity) * (num(it.servings) || 1), 0)
   const rations = totalOf('food'), cups = totalOf('drink')
@@ -56,8 +61,9 @@ export default function HomeTab({ onNavigate }) {
     alerts.push({ level: shipPct <= 0.25 ? 'crit' : 'warn', icon: '⚓', tab: 'ship', text: `The hull is ${shipPct <= 0.25 ? 'nearly wrecked' : 'battered'} — ${shipHp}/${shipHpMax} HP. Put in for repairs.` })
   if (num(sd.speedCurrent) < num(sd.speedMax))
     alerts.push({ level: 'warn', icon: '⛵', tab: 'ship', text: `Sails are torn — speed ${sd.speedCurrent}/${sd.speedMax}. Mend them at a shipyard.` })
-  // wounded or incapacitated crew — players and NPCs alike
-  crew.forEach((m) => {
+  // wounded or incapacitated crew — players and NPCs alike (hidden/staged
+  // characters never raise Helm alerts)
+  visible.forEach((m) => {
     const cond = m.stats?.condition
     if (cond) { alerts.push({ level: 'crit', icon: '⛓', tab: 'crew', mid: m.id, text: `${m.name} is incapacitated — ${cond}.` }); return }
     const s = m.sheet_data; if (!s) return
