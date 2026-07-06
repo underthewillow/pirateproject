@@ -96,3 +96,17 @@
 .crew-card .npc-rank { font-size: 9.5px; padding: 1px 6px; }
 .crew-card-class { font-size: 10.5px; margin-top: 2px; line-height: 1.15; }
 @media (max-width: 640px) { .crew-card { width: 104px; } }
+
+/* ---- Helm: make hero title + stat counters clickable links to their pages ---- */
+button.dash-hero-id {
+  display: block; text-align: left; background: none; border: none; font: inherit; color: inherit;
+  padding: 4px 8px; margin: -4px -8px; border-radius: 9px; cursor: pointer;
+  transition: background 0.12s ease;
+}
+button.dash-hero-id:hover { background: rgba(255,250,235,0.28); }
+button.dash-hero-stat {
+  background: none; border: none; font: inherit; color: inherit; cursor: pointer;
+  padding: 5px 9px; border-radius: 9px;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: translateY(-1px); }
