@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAppAuth } from '../../context/AuthContext'
 import Editable from '../common/Editable'
 
 export default function FundsTab() {
   const { funds, ledger, patchSingleton, addItem, removeItem, canEdit } = useData()
+  const { hasRole } = useAppAuth()
+  // Any crew member can log a new entry (additive, self-auditing) — editing
+  // history, adjusting the purse directly, and settling stay DM/admin-only.
+  const canLogLedger = canEdit || hasRole('crew_member')
   const [desc, setDesc] = useState('')
   const [amount, setAmount] = useState('')
   const [sign, setSign] = useState(1)
@@ -70,7 +75,7 @@ export default function FundsTab() {
 
         {/* Ledger */}
         <div>
-          {canEdit && (
+          {canLogLedger && (
             <form className="toolbar card" onSubmit={addEntry} style={{ marginBottom: 12 }}>
               <input className="input grow" style={{ width: 'auto' }} placeholder="Description" value={desc} onChange={(e) => setDesc(e.target.value)} />
               <input className="input" style={{ width: 110 }} placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />

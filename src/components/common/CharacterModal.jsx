@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAppAuth } from '../../context/AuthContext'
 import { assetUrl } from '../../lib/asset'
 import Avatar from './Avatar'
 import Editable from './Editable'
@@ -29,8 +30,29 @@ const DEFAULT_PER_DAY = 1
 
 export default function CharacterModal({ member, onClose }) {
   const { patchItem, removeItem, addRole, removeRole, roles, canEdit } = useData()
+  const { identity } = useAppAuth()
   const [showPortrait, setShowPortrait] = useState(false)
+  // Off by default each time the card is opened — ability scores/max HP are
+  // infrequent, easy-to-fumble edits, so they sit behind an explicit toggle.
+  // HP itself and rolling are deliberately NOT gated by this — they're what a
+  // player actually touches constantly during normal play.
+  const [selfEditMode, setSelfEditMode] = useState(false)
   if (!member) return null
+
+  // A crew member gets self-service access to whichever character(s) they're
+  // linked to — PC or NPC alike, ownership is what matters, not is_pc.
+  // Everything else on this card (roster management, roles, hiding, image
+  // URLs, etc.) stays DM/admin-only.
+  const isOwnChar = !!identity?.linkedCrewIds?.includes(member.id)
+  // HP and rolling: always live for your own character, no toggle needed —
+  // and, new as of this pass, rolling is no longer open to everyone; only
+  // the character's own player (or the DM) can roll on their behalf.
+  const ownCharEditable = canEdit || isOwnChar
+  // Ability scores, max HP, condition, bio: behind the edit-mode toggle for a
+  // self-editing crew member — but only for a linked PC. NPCs are DM-authored
+  // stat blocks; a player handed one stays limited to current HP, same as
+  // everyone else, with no deeper self-edit tier at all.
+  const deepEditable = canEdit || (member.is_pc && isOwnChar && selfEditMode)
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
@@ -83,6 +105,7 @@ export default function CharacterModal({ member, onClose }) {
             className="eyebrow"
             placeholder="add a title / epithet"
             value={member.title}
+            editable={deepEditable}
             onCommit={(v) => patchItem('crew', member.id, { title: v })}
           />
         </div>
@@ -121,16 +144,18 @@ export default function CharacterModal({ member, onClose }) {
             {canEdit && rk !== 'passenger' && <button className="btn small ghost" onClick={demote} title="Lower standing">▾ demote</button>}
           </div>
           {rk === 'recruit' && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Ink the Black Knot to make them full crew — the tattoo is the initiation.</p>}
-          <div style={{ marginTop: 10 }}>
-            <label className="eyebrow">Condition</label>
-            <Editable
-              value={member.stats?.condition}
-              placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
-              onCommit={(v) => setStats({ ...stats, condition: v })}
-            />
-          </div>
         </div>
       )}
+
+      <div style={{ marginBottom: 14 }}>
+        <label className="eyebrow">Condition</label>
+        <Editable
+          value={member.stats?.condition}
+          placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
+          editable={deepEditable}
+          onCommit={(v) => setStats({ ...stats, condition: v })}
+        />
+      </div>
 
       <div>
         <label className="eyebrow">Whereabouts</label>
@@ -217,12 +242,22 @@ export default function CharacterModal({ member, onClose }) {
           multiline
           placeholder="Write what's known of this soul…"
           value={member.bio}
+          editable={deepEditable}
           onCommit={(v) => patchItem('crew', member.id, { bio: v })}
         />
       </div>
 
       {member.sheet_data ? (
-        member.is_pc ? <StatBlock member={member} /> : <NpcStatBlock member={member} />
+        member.is_pc
+          ? <StatBlock
+              member={member}
+              ownCharEditable={ownCharEditable}
+              deepEditable={deepEditable}
+              showEditToggle={isOwnChar && !canEdit}
+              selfEditMode={selfEditMode}
+              onToggleSelfEdit={() => setSelfEditMode((m) => !m)}
+            />
+          : <NpcStatBlock member={member} ownCharEditable={ownCharEditable} deepEditable={deepEditable} />
       ) : (
         <>
           {(member.is_pc || ABILITIES.some((a) => abilityValue(a) !== '')) && (
@@ -234,7 +269,7 @@ export default function CharacterModal({ member, onClose }) {
                   return (
                     <div className="ability" key={a}>
                       <div className="ability-abbr">{a}</div>
-                      {canEdit ? (
+                      {deepEditable ? (
                         <input
                           className="input ability-input"
                           type="number"
@@ -250,6 +285,19 @@ export default function CharacterModal({ member, onClose }) {
                   )
                 })}
               </div>
+            </div>
+          )}
+
+          {member.is_pc && isOwnChar && !canEdit && (
+            <div className="center" style={{ margin: '10px 0' }}>
+              <button
+                type="button"
+                className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
+                onClick={() => setSelfEditMode((m) => !m)}
+                title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
+              >
+                {selfEditMode ? 'Done' : 'Edit'}
+              </button>
             </div>
           )}
 
@@ -278,7 +326,7 @@ export default function CharacterModal({ member, onClose }) {
           </div>
 
           <hr className="rule" />
-          <DiceRoller member={member} />
+          <DiceRoller member={member} canRoll={ownCharEditable} />
         </>
       )}
 
