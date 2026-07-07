@@ -47,17 +47,13 @@ function AuthenticationTab() {
 
 function UserManagementTab() {
   const { appUsers, crew, addUserRole, removeUserRole, setLinkedCrewIds } = useData()
-  const { identity } = useAppAuth()
 
-  // Guardrails against locking everyone out of admin: the local breakglass
-  // account can never be demoted, nobody can demote themselves, and the last
-  // real (non-local-admin) admin can't be removed either — otherwise the
-  // breakglass password would become the only way back in.
-  const realAdminCount = appUsers.filter((u) => u.id !== 'local-admin' && (u.roles || []).includes('admin')).length
+  // The only guardrail: the local breakglass account can never lose admin —
+  // that's the one fallback path back in if every other admin is somehow
+  // removed. Any other admin is free to add/remove roles from anyone,
+  // including themselves.
   const blockAdminRemoval = (u) => {
     if (u.id === 'local-admin') return "The local admin account can't be demoted."
-    if (u.id === identity?.id) return "You can't remove your own admin role."
-    if (realAdminCount <= 1) return 'At least one admin besides the local admin must remain.'
     return null
   }
 
