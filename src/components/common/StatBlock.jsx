@@ -8,11 +8,12 @@ const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 
 // D&D-Beyond-style sheet for player characters, with click-to-roll everywhere.
 // Reads the imported `sheet_data`; every roll respects the Adv/Dis toggle.
-// `selfEditable` lets the crew member linked to this PC edit HP/ability
-// scores on their own sheet even without the DM/admin canEdit flag.
-export default function StatBlock({ member, selfEditable = false }) {
+// `ownCharEditable` (HP + rolling — always on for the linked player) and
+// `deepEditable` (ability scores/max HP — behind their edit-mode toggle) let
+// the crew member linked to this PC act on their own sheet without the
+// DM/admin canEdit flag; nobody else can roll or edit it either way.
+export default function StatBlock({ member, ownCharEditable = false, deepEditable = false }) {
   const { patchItem, canEdit } = useData()
-  const editableSelf = canEdit || selfEditable
   const roller = useRoller()
   const s = member.sheet_data
   const [mode, setMode] = useState('normal')
@@ -72,18 +73,18 @@ export default function StatBlock({ member, selfEditable = false }) {
         </div>
         <div className="sb-stat sb-hp">
           <div className="sb-stat-num">
-            {editableSelf
+            {ownCharEditable
               ? <input className="input sb-hp-input" type="number" value={cur} onChange={(e) => setHp(e.target.value)} />
               : cur}
             <span className="muted" style={{ fontSize: 14 }}>
               {' / '}
-              {editableSelf
+              {deepEditable
                 ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} />
                 : s.maxHp}
             </span>
           </div>
           <div className="sb-stat-lbl">Hit Points</div>
-          {editableSelf && (
+          {ownCharEditable && (
             <div className="sb-hp-btns">
               <button className="btn small danger" onClick={() => setHp(cur - 1)}>−</button>
               <button className="btn small" onClick={() => setHp(cur + 1)}>+</button>
@@ -91,7 +92,7 @@ export default function StatBlock({ member, selfEditable = false }) {
             </div>
           )}
         </div>
-        <button className="sb-stat sb-click" onClick={() => d20('Initiative', s.initiative)}>
+        <button className="sb-stat sb-click" disabled={!ownCharEditable} onClick={() => d20('Initiative', s.initiative)}>
           <div className="sb-stat-num">{fmt(s.initiative)}</div><div className="sb-stat-lbl">Initiative ⚄</div>
         </button>
         <div className="sb-stat"><div className="sb-stat-num">{s.speed}<span className="muted" style={{ fontSize: 12 }}>ft</span></div><div className="sb-stat-lbl">Speed</div></div>
@@ -105,11 +106,11 @@ export default function StatBlock({ member, selfEditable = false }) {
           return (
             <div className="sb-abil" key={k}>
               <div className="sb-abil-abbr">{k}</div>
-              <button className="sb-abil-mod sb-click" onClick={() => d20(`${k} check`, a.mod)} title="Roll ability check">{fmt(a.mod)}</button>
-              {editableSelf
+              <button className="sb-abil-mod sb-click" disabled={!ownCharEditable} onClick={() => d20(`${k} check`, a.mod)} title="Roll ability check">{fmt(a.mod)}</button>
+              {deepEditable
                 ? <input className="input ability-input" type="number" value={a.score ?? ''} onChange={(e) => setAbilityScore(k, e.target.value)} />
                 : <div className="sb-abil-score">{a.score}</div>}
-              <button className="sb-abil-save sb-click" onClick={() => d20(`${k} save`, a.save)} title="Roll saving throw">
+              <button className="sb-abil-save sb-click" disabled={!ownCharEditable} onClick={() => d20(`${k} save`, a.save)} title="Roll saving throw">
                 save {fmt(a.save)}{a.saveProf ? ' ●' : ''}
               </button>
             </div>
@@ -120,7 +121,7 @@ export default function StatBlock({ member, selfEditable = false }) {
       <div className="sb-section-title">Skills</div>
       <div className="sb-skills">
         {skills.map((sk) => (
-          <button key={sk.n} className="sb-skill sb-click" onClick={() => d20(sk.n, sk.m)}>
+          <button key={sk.n} className="sb-skill sb-click" disabled={!ownCharEditable} onClick={() => d20(sk.n, sk.m)}>
             <span className={`sb-dot ${sk.p ? 'on' : ''} ${sk.e ? 'exp' : ''}`} />
             <span className="sb-skill-name">{sk.n}</span>
             <span className="sb-skill-abil muted">{sk.a}</span>
@@ -139,8 +140,8 @@ export default function StatBlock({ member, selfEditable = false }) {
                 {[at.type, at.range, at.notes].filter(Boolean).join(' · ')}
               </div>
             </div>
-            <button className="btn small sb-atk-btn" title="Roll to hit" onClick={() => d20(`${at.n} attack`, at.toHit)}>{fmt(at.toHit)} hit</button>
-            <button className="btn small brass sb-atk-btn" title="Roll damage" onClick={() => dmg(at.n, at.dmg)}>{at.dmg}</button>
+            <button className="btn small sb-atk-btn" disabled={!ownCharEditable} title="Roll to hit" onClick={() => d20(`${at.n} attack`, at.toHit)}>{fmt(at.toHit)} hit</button>
+            <button className="btn small brass sb-atk-btn" disabled={!ownCharEditable} title="Roll damage" onClick={() => dmg(at.n, at.dmg)}>{at.dmg}</button>
           </div>
         ))}
       </div>
@@ -169,15 +170,19 @@ export default function StatBlock({ member, selfEditable = false }) {
           <div className="sb-spell">
             <span>Ability <strong>{s.spell.ability}</strong></span>
             <span>Save DC <strong>{s.spell.saveDc}</strong></span>
-            <button className="btn small sb-click" onClick={() => d20('Spell attack', s.spell.atk)}>Spell attack {fmt(s.spell.atk)}</button>
+            <button className="btn small sb-click" disabled={!ownCharEditable} onClick={() => d20('Spell attack', s.spell.atk)}>Spell attack {fmt(s.spell.atk)}</button>
           </div>
         </>
       )}
 
       <div className="toolbar" style={{ marginTop: 12 }}>
-        <input className="input" placeholder="custom roll, e.g. 2d6+3" value={expr}
-          onChange={(e) => setExpr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && custom()} style={{ maxWidth: 200 }} />
-        <button className="btn brass" onClick={custom}>Roll</button>
+        {ownCharEditable && (
+          <>
+            <input className="input" placeholder="custom roll, e.g. 2d6+3" value={expr}
+              onChange={(e) => setExpr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && custom()} style={{ maxWidth: 200 }} />
+            <button className="btn brass" onClick={custom}>Roll</button>
+          </>
+        )}
         {log.length > 0 && <button className="btn small ghost" onClick={() => setLog([])}>Clear</button>}
       </div>
       <div className="dice-log">
