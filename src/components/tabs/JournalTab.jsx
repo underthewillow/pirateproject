@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAppAuth } from '../../context/AuthContext'
 import Editable from '../common/Editable'
 
 export default function JournalTab() {
   const { journal, addItem, patchItem, removeItem, canEdit } = useData()
+  const { hasRole } = useAppAuth()
+  // Any crew member can start a new entry and write its recap — renaming,
+  // re-numbering, and deleting entries stays DM/admin-only.
+  const canContribute = canEdit || hasRole('crew_member')
   const [openIds, setOpenIds] = useState(() => new Set())
 
   // Newest first: by session number, then by creation time.
@@ -40,7 +45,7 @@ export default function JournalTab() {
           <h2 className="section-title">Ship's Journal</h2>
           <p className="muted" style={{ margin: 0 }}>Session recaps and summaries for the crew to look back on.</p>
         </div>
-        {canEdit && <button className="btn brass" onClick={addEntry}>+ New entry</button>}
+        {canContribute && <button className="btn brass" onClick={addEntry}>+ New entry</button>}
       </div>
       <hr className="rule" />
 
@@ -75,6 +80,7 @@ export default function JournalTab() {
                     multiline
                     placeholder="Write the recap of this session…"
                     value={e.body}
+                    editable={canContribute}
                     onCommit={(v) => patchItem('journal', e.id, { body: v })}
                   />
                 </div>
