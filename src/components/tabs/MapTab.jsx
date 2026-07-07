@@ -78,12 +78,17 @@ export default function MapTab() {
   const [localPos, setLocalPos] = useState(null) // {id,x,y} while dragging a marker
 
   const svgRef = useRef(null)
+  const groupRef = useRef(null)
   const viewRef = useRef(view)
-  viewRef.current = view
   const pointers = useRef(new Map())
   const pinchRef = useRef(null)
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
+  // Keep viewRef in sync with React state on ordinary renders — but not while
+  // a drag is in flight (see onBgMove/panImperative below), or an unrelated
+  // re-render (e.g. a Realtime update from something else in the app) would
+  // stomp the in-progress imperative pan and snap the map back mid-drag.
+  if (pointers.current.size === 0) viewRef.current = view
 
   const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
   const W = chart.w || 1448
@@ -125,7 +130,18 @@ export default function MapTab() {
       return clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
     })
   }, [svgPoint, clampView])
-  const pan = useCallback((dx, dy) => setView((v) => clampView({ ...v, tx: v.tx + dx, ty: v.ty + dy })), [clampView])
+  // Panning writes straight to the DOM instead of React state — a drag can
+  // fire pointermove dozens of times a second, and running the whole map
+  // (fog mask, every marker) through React's render/reconcile cycle on each
+  // one is what made scrolling feel slow. The transform is only a translate,
+  // so markers (nested inside this same group) tag along for free with no
+  // per-marker work at all. React state is resynced once in onBgUp, when the
+  // gesture actually ends.
+  const panImperative = useCallback((dx, dy) => {
+    const next = clampView({ ...viewRef.current, tx: viewRef.current.tx + dx, ty: viewRef.current.ty + dy })
+    viewRef.current = next
+    groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
+  }, [clampView])
 
   // wheel zoom (manual listener so we can preventDefault)
   useEffect(() => {
@@ -157,7 +173,7 @@ export default function MapTab() {
       tapRef.current = null
     } else {
       const A = svgPoint(prev.x, prev.y), B = svgPoint(e.clientX, e.clientY)
-      pan(B.x - A.x, B.y - A.y)
+      panImperative(B.x - A.x, B.y - A.y)
     }
   }
   const onBgUp = (e) => {
@@ -169,6 +185,10 @@ export default function MapTab() {
     tapRef.current = null
     const tapped = start && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 6
     if (tapped && placing && canEdit) addMarkerAt(e.clientX, e.clientY)
+    // Commit the final imperative pan position into React state now that the
+    // gesture has ended (harmless no-op if this was a pinch-zoom instead,
+    // which already keeps state in sync via zoomAround's setView calls).
+    setView(viewRef.current)
   }
 
   // No window.prompt (the desktop app blocks it) — create the marker, then open
@@ -302,7 +322,7 @@ export default function MapTab() {
               </mask>
             </defs>
 
-            <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
+            <g ref={groupRef} transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
               {/* painted chart */}
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
