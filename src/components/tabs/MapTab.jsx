@@ -362,7 +362,13 @@ export default function MapTab() {
               </mask>
             </defs>
 
-            <g ref={groupRef} transform={`translate(${viewRef.current.tx},${viewRef.current.ty}) scale(${viewRef.current.s})`} clipPath="url(#mapclip)">
+            {/* will-change hints the browser to composite this subtree (chart
+                image + the blurred/noisy fog-of-war filter effects) as its own
+                cached layer rather than re-rendering the filters from scratch
+                on every pan/zoom frame — mobile Safari in particular is known
+                to be much weaker than desktop at caching filtered SVG content
+                across transform changes without this hint. */}
+            <g ref={groupRef} style={{ willChange: 'transform' }} transform={`translate(${viewRef.current.tx},${viewRef.current.ty}) scale(${viewRef.current.s})`} clipPath="url(#mapclip)">
               {/* painted chart */}
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
