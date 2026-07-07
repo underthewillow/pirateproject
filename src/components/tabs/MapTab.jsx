@@ -150,6 +150,31 @@ export default function MapTab() {
   const markersRef = useRef([])
   const localPosRef = useRef(null)
   const wheelCommitTimer = useRef(null)
+  const extraFactorRef = useRef(1)
+  // Markers are sized in fixed SVG viewBox units, counter-scaled by `inv` so
+  // they stay a constant size independent of *zoom* — but the SVG itself also
+  // scales to fit whatever width its container renders at, which is nowhere
+  // near the same on a full desktop window vs. a narrow phone screen. Without
+  // correcting for that too, the exact same marker ends up ~3x smaller on
+  // mobile than desktop. Track the SVG's actual rendered width so marker size
+  // can be normalized against it, landing on a consistent real on-screen size
+  // everywhere.
+  const [svgWidthPx, setSvgWidthPx] = useState(null)
+  const pendingSvgWidthRef = useRef(null)
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      // Applying this mid-gesture would re-render (and briefly re-mount) the
+      // markers React is otherwise deliberately not touching during a pan or
+      // pinch (see panImperative/zoomImperative) — defer it to onBgUp instead.
+      if (pointers.current.size === 0) setSvgWidthPx(w)
+      else pendingSvgWidthRef.current = w
+    })
+    ro.observe(svg)
+    return () => ro.disconnect()
+  }, [])
   // Keep viewRef in sync with React state on ordinary renders — but not while
   // a pan/pinch gesture is in flight (see panImperative/zoomImperative below),
   // or an unrelated re-render (e.g. a Realtime update from something else in
@@ -222,7 +247,7 @@ export default function MapTab() {
     const next = clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
     viewRef.current = next
     groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
-    const inv = 1 / next.s
+    const inv = extraFactorRef.current / next.s
     for (const l of markersRef.current) {
       const node = markerRefs.current.get(l.id)
       if (!node) continue
@@ -283,6 +308,10 @@ export default function MapTab() {
     // gesture has ended (harmless no-op if this was a pinch-zoom instead,
     // which already keeps state in sync via zoomAround's setView calls).
     setView(viewRef.current)
+    if (pendingSvgWidthRef.current != null) {
+      setSvgWidthPx(pendingSvgWidthRef.current)
+      pendingSvgWidthRef.current = null
+    }
   }
 
   // No window.prompt (the desktop app blocks it) — create the marker, then open
@@ -351,11 +380,20 @@ export default function MapTab() {
   // needs the current marker list/drag position without stale closures.
   markersRef.current = visible
   localPosRef.current = localPos
+  // Normalizes marker size against the SVG's actual rendered width (see the
+  // ResizeObserver above) so a marker is the same real on-screen size on a
+  // phone as on a desktop window, then targets a modestly bigger, brighter
+  // size than the map previously rendered at on desktop.
+  const pxPerUnit = (svgWidthPx || W * 0.8) / W
+  const MARKER_TARGET_DIAMETER_PX = 28
+  const BASE_RING_R = 14
+  const extraFactor = MARKER_TARGET_DIAMETER_PX / (2 * BASE_RING_R * pxPerUnit)
+  extraFactorRef.current = extraFactor
   // Read from viewRef rather than view state directly — viewRef is always
   // current (kept live during pan/zoom gestures, synced from state otherwise),
   // so an unrelated re-render mid-gesture re-renders this with the correct
   // in-progress position instead of snapping back to stale committed state.
-  const inv = 1 / viewRef.current.s
+  const inv = extraFactor / viewRef.current.s
 
   return (
     <div>
@@ -452,7 +490,7 @@ export default function MapTab() {
                   >
                     <circle r="32" fill="#000" opacity="0" pointerEvents="all" />
                     <circle className="mm-pulse" r="16" fill="none" stroke={known ? t.c : '#6b573a'} strokeWidth="2" />
-                    <circle className="mm-ring" r="14" fill={known ? t.c : '#6b573a'} fillOpacity="0.25"
+                    <circle className="mm-ring" r="14" fill={known ? t.c : '#6b573a'} fillOpacity="0.32"
                       stroke={known ? t.c : '#6b573a'} strokeWidth="3" />
                     <text className="mm-glyph" x="0" y="6" textAnchor="middle"
                       style={{ font: '17px serif', fill: known ? t.c : '#6b573a' }}>{known ? t.g : '?'}</text>
