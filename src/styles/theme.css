@@ -55,6 +55,11 @@ body {
     repeating-linear-gradient(90deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 8px),
     repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 5px),
     linear-gradient(135deg, #1f1206, #120a03 55%, #080401);
+  /* iOS 26 Safari tints its top/bottom chrome from this exact property, not
+     from theme-color and not from the rendered gradient pixels — must be
+     restated after the `background` shorthand above, which resets it to
+     transparent since the shorthand's layers don't include a plain color. */
+  background-color: #120a03;
   background-attachment: fixed;
   font-size: 18px;
   -webkit-font-smoothing: antialiased;
@@ -115,7 +120,7 @@ body {
   flex-direction: column;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 18px 16px 60px;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(60px + env(safe-area-inset-bottom));
 }
 
 /* ---------- masthead ---------- */
@@ -665,7 +670,7 @@ body {
 /* ---------- character portrait ---------- */
 .pc-star { color: var(--gold); margin-right: 4px; font-size: 13px; }
 .portrait-frame {
-  display: block; position: relative; margin: 14px auto 0;
+  display: block; position: relative; margin: 14px auto 0; padding: 0; font: inherit;
   width: fit-content; max-width: 100%;
   border: 1px solid var(--leather-darker); border-radius: var(--radius);
   background: linear-gradient(160deg, #1b1109, #0d0703);
