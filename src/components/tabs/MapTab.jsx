@@ -84,10 +84,15 @@ export default function MapTab() {
   const pinchRef = useRef(null)
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
+  const markerRefs = useRef(new Map())
+  const markersRef = useRef([])
+  const localPosRef = useRef(null)
+  const wheelCommitTimer = useRef(null)
   // Keep viewRef in sync with React state on ordinary renders — but not while
-  // a drag is in flight (see onBgMove/panImperative below), or an unrelated
-  // re-render (e.g. a Realtime update from something else in the app) would
-  // stomp the in-progress imperative pan and snap the map back mid-drag.
+  // a pan/pinch gesture is in flight (see panImperative/zoomImperative below),
+  // or an unrelated re-render (e.g. a Realtime update from something else in
+  // the app) would stomp the in-progress imperative view and snap the map
+  // back mid-gesture.
   if (pointers.current.size === 0) viewRef.current = view
 
   const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
@@ -122,6 +127,8 @@ export default function MapTab() {
     return { x: (vb.x - v.tx) / v.s, y: (vb.y - v.ty) / v.s }
   }, [svgPoint])
 
+  // Discrete, single-shot zoom (HUD +/- buttons, reset view) — a plain React
+  // state update is fine here since it's one click, not a continuous gesture.
   const zoomAround = useCallback((cx, cy, f) => {
     const vb = svgPoint(cx, cy)
     setView((v) => {
@@ -130,27 +137,52 @@ export default function MapTab() {
       return clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
     })
   }, [svgPoint, clampView])
-  // Panning writes straight to the DOM instead of React state — a drag can
-  // fire pointermove dozens of times a second, and running the whole map
-  // (fog mask, every marker) through React's render/reconcile cycle on each
-  // one is what made scrolling feel slow. The transform is only a translate,
-  // so markers (nested inside this same group) tag along for free with no
-  // per-marker work at all. React state is resynced once in onBgUp, when the
-  // gesture actually ends.
+  // Panning and continuous zoom (wheel/pinch) write straight to the DOM
+  // instead of React state — both can fire dozens of times a second, and
+  // running the whole map (fog mask, every marker) through React's
+  // render/reconcile cycle on each one is what made panning and zooming feel
+  // slow. Markers are nested inside the same transformed group, so a pure
+  // pan moves them for free; a zoom also needs each marker's own counter-
+  // scale updated (so glyphs stay a constant on-screen size), so those get
+  // their transform attribute rewritten directly too. React state is
+  // resynced once the gesture actually ends (onBgUp for pinch, a short
+  // debounce for wheel, which has no discrete "end" event).
   const panImperative = useCallback((dx, dy) => {
     const next = clampView({ ...viewRef.current, tx: viewRef.current.tx + dx, ty: viewRef.current.ty + dy })
     viewRef.current = next
     groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
   }, [clampView])
+  const zoomImperative = useCallback((cx, cy, f) => {
+    const vb = svgPoint(cx, cy)
+    const v = viewRef.current
+    const ns = clamp(v.s * f, 1, 6)
+    const wx = (vb.x - v.tx) / v.s, wy = (vb.y - v.ty) / v.s
+    const next = clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
+    viewRef.current = next
+    groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
+    const inv = 1 / next.s
+    for (const l of markersRef.current) {
+      const node = markerRefs.current.get(l.id)
+      if (!node) continue
+      const lp = localPosRef.current
+      const p = lp && lp.id === l.id ? lp : l
+      node.setAttribute('transform', `translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`)
+    }
+  }, [svgPoint, clampView])
 
   // wheel zoom (manual listener so we can preventDefault)
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    const onWheel = (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18) }
+    const onWheel = (e) => {
+      e.preventDefault()
+      zoomImperative(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18)
+      clearTimeout(wheelCommitTimer.current)
+      wheelCommitTimer.current = setTimeout(() => setView(viewRef.current), 150)
+    }
     svg.addEventListener('wheel', onWheel, { passive: false })
-    return () => svg.removeEventListener('wheel', onWheel)
-  }, [zoomAround, chartKey])
+    return () => { svg.removeEventListener('wheel', onWheel); clearTimeout(wheelCommitTimer.current) }
+  }, [zoomImperative, chartKey])
 
   // ---- background pan / pinch ----
   const onBgDown = (e) => {
@@ -168,7 +200,7 @@ export default function MapTab() {
       const [a, b] = pts
       const dist = Math.hypot(a.x - b.x, a.y - b.y)
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-      if (pinchRef.current) zoomAround(mid.x, mid.y, dist / pinchRef.current)
+      if (pinchRef.current) zoomImperative(mid.x, mid.y, dist / pinchRef.current)
       pinchRef.current = dist
       tapRef.current = null
     } else {
@@ -250,7 +282,15 @@ export default function MapTab() {
   const visible = mine.filter((l) => canEdit || isCharted(l.region))
   const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
-  const inv = 1 / view.s
+  // Cached for zoomImperative, which runs outside React's render cycle and
+  // needs the current marker list/drag position without stale closures.
+  markersRef.current = visible
+  localPosRef.current = localPos
+  // Read from viewRef rather than view state directly — viewRef is always
+  // current (kept live during pan/zoom gestures, synced from state otherwise),
+  // so an unrelated re-render mid-gesture re-renders this with the correct
+  // in-progress position instead of snapping back to stale committed state.
+  const inv = 1 / viewRef.current.s
 
   return (
     <div>
@@ -322,7 +362,7 @@ export default function MapTab() {
               </mask>
             </defs>
 
-            <g ref={groupRef} transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
+            <g ref={groupRef} transform={`translate(${viewRef.current.tx},${viewRef.current.ty}) scale(${viewRef.current.s})`} clipPath="url(#mapclip)">
               {/* painted chart */}
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
@@ -348,6 +388,7 @@ export default function MapTab() {
                 const faded = canEdit && !isCharted(l.region) // editor-only preview of un-revealed pins
                 return (
                   <g key={l.id}
+                    ref={(node) => { if (node) markerRefs.current.set(l.id, node); else markerRefs.current.delete(l.id) }}
                     className="map-marker"
                     transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
                     style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1 }}
