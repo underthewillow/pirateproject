@@ -420,13 +420,23 @@ body {
 }
 .modal {
   max-width: 560px; width: 100%;
-  max-height: 88vh; overflow: auto;
+  max-height: 88vh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+/* Scrolling lives on this inner wrapper, not on .modal itself — .modal carries
+   the parchment::before/::after vignette (position:absolute, inset:0), which
+   would otherwise be sized to the un-scrolled box and create a hard seam
+   partway down the card once you scroll past it. */
+.modal-scroll {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
   padding: 26px 28px;
 }
 .modal-close {
   position: absolute; top: 10px; right: 14px;
   font-family: var(--font-display); font-size: 24px;
   background: none; border: none; color: var(--ink-faded); cursor: pointer;
+  z-index: 1;
 }
 
 /* ---------- nav drawer (hamburger menu) ---------- */
@@ -855,7 +865,7 @@ button.sb-stat.sb-click, .sb-click.sb-stat { border: 1px solid var(--parchment-e
   .section-title { font-size: 22px; }
   .section-title.small { font-size: 18px; }
 
-  .modal { padding: 20px 18px; }
+  .modal-scroll { padding: 20px 18px; }
 
   /* Give the map a taller, more usable shape on a narrow screen */
   .map-wrap { aspect-ratio: 4 / 5; }

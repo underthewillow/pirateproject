@@ -11,7 +11,7 @@ export default function Modal({ children, onClose, className = '' }) {
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className={`parchment modal ${className}`} style={{ position: 'relative' }}>
         <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
-        {children}
+        <div className="modal-scroll">{children}</div>
       </div>
     </div>
   )
