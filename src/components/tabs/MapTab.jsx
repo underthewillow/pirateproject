@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
@@ -62,11 +62,45 @@ function regionAt(regions, x, y) {
   for (const r of regions || []) if ((r.shapes || []).some((s) => shapeHas(s, x, y))) return r.key
   return ''
 }
-// Render one reveal shape (used inside the fog mask, painted black to cut fog).
-function ShapeEl({ s, fill }) {
-  if (s.t === 'ellipse') return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} fill={fill} />
-  if (s.t === 'capsule') return <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={fill} strokeWidth={s.r * 2} strokeLinecap="round" />
-  return null
+// String form of a reveal shape (fog cutout), for the offscreen fog rasterization below.
+function shapeMarkup(s) {
+  if (s.t === 'ellipse') return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" fill="#000"/>`
+  if (s.t === 'capsule') return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="#000" stroke-width="${s.r * 2}" stroke-linecap="round"/>`
+  return ''
+}
+// The fog-of-war (blur + procedural noise, masked by charted regions) never
+// actually changes during pan/zoom — only its position on screen does. But
+// living inside the transformed group as a *live* SVG filter meant every
+// engine had to keep re-deriving those (fairly heavy) pixels on every single
+// frame of a gesture. Desktop Chromium/Edge cache that well enough not to
+// notice; mobile Safari does not, and that mismatch — identical code, fine on
+// desktop, laggy on iOS — is what pointed at this specifically. Baking it to
+// a plain PNG once (whenever the charted regions actually change) turns the
+// per-frame cost into "transform a static image," which is cheap everywhere.
+function buildFogDataUrl(W, H, chartedRegions) {
+  const cutouts = chartedRegions.flatMap((r) => (r.shapes || []).map(shapeMarkup)).join('')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <defs>
+      <filter id="soft"><feGaussianBlur stdDeviation="26"/></filter>
+      <filter id="fognoise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0"/>
+      </filter>
+      <mask id="fogmask">
+        <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>
+        <g filter="url(#soft)">${cutouts}</g>
+      </mask>
+    </defs>
+    <g mask="url(#fogmask)">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="#1f2b31" opacity="0.92"/>
+      <rect x="0" y="0" width="${W}" height="${H}" filter="url(#fognoise)" opacity="0.5"/>
+      <text x="${W * 0.70}" y="${H * 0.86}" text-anchor="middle" opacity="0.4"
+        style="font: italic 600 34px Cinzel, 'IM Fell English SC', serif; fill:#d8c8a6">Here be uncharted waters</text>
+      <text x="${W * 0.24}" y="${H * 0.7}" text-anchor="middle" opacity="0.32"
+        style="font: italic 600 26px Cinzel, 'IM Fell English SC', serif; fill:#d8c8a6">terra incognita</text>
+    </g>
+  </svg>`
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 }
 
 export default function MapTab() {
@@ -282,6 +316,12 @@ export default function MapTab() {
   const visible = mine.filter((l) => canEdit || isCharted(l.region))
   const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
+  // Only rebuilds when the actual fog content changes (charting a new region,
+  // switching charts) — not on every pan/zoom frame. See buildFogDataUrl.
+  const fogDataUrl = useMemo(
+    () => buildFogDataUrl(W, H, chartedRegions),
+    [W, H, chartedRegions.map((r) => r.key).join(',')]
+  )
   // Cached for zoomImperative, which runs outside React's render cycle and
   // needs the current marker list/drag position without stale closures.
   markersRef.current = visible
@@ -346,20 +386,7 @@ export default function MapTab() {
             onPointerCancel={onBgUp}
           >
             <defs>
-              <filter id="soft"><feGaussianBlur stdDeviation="26" /></filter>
-              <filter id="fognoise">
-                <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n" />
-                <feColorMatrix in="n" type="matrix"
-                  values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0" />
-              </filter>
               <clipPath id="mapclip"><rect x="0" y="0" width={W} height={H} /></clipPath>
-              {/* fog mask: white = fogged, black cut-outs = charted/revealed */}
-              <mask id="fogmask">
-                <rect x="0" y="0" width={W} height={H} fill="#fff" />
-                <g filter="url(#soft)">
-                  {chartedRegions.flatMap((r) => r.shapes.map((s, i) => <ShapeEl key={r.key + i} s={s} fill="#000" />))}
-                </g>
-              </mask>
             </defs>
 
             {/* will-change hints the browser to composite this subtree (chart
@@ -372,19 +399,10 @@ export default function MapTab() {
               {/* painted chart */}
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
-              {/* fog of war over everything not yet charted */}
-              <g mask="url(#fogmask)" pointerEvents="none" clipPath="url(#mapclip)">
-                <rect x="0" y="0" width={W} height={H} fill="#1f2b31" opacity="0.92" />
-                <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.5" />
-                <text x={W * 0.70} y={H * 0.86} textAnchor="middle"
-                  style={{ font: 'italic 600 34px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.4">
-                  Here be uncharted waters
-                </text>
-                <text x={W * 0.24} y={H * 0.7} textAnchor="middle"
-                  style={{ font: 'italic 600 26px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.32">
-                  terra incognita
-                </text>
-              </g>
+              {/* fog of war over everything not yet charted — pre-rendered
+                  (see buildFogDataUrl) instead of a live filter, so panning/
+                  zooming only ever transforms a plain bitmap */}
+              <image href={fogDataUrl} x="0" y="0" width={W} height={H} pointerEvents="none" clipPath="url(#mapclip)" />
 
               {/* markers */}
               {visible.map((l) => {
