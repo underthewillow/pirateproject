@@ -249,7 +249,14 @@ export default function CharacterModal({ member, onClose }) {
 
       {member.sheet_data ? (
         member.is_pc
-          ? <StatBlock member={member} ownCharEditable={ownCharEditable} deepEditable={deepEditable} />
+          ? <StatBlock
+              member={member}
+              ownCharEditable={ownCharEditable}
+              deepEditable={deepEditable}
+              showEditToggle={isOwnChar && !canEdit}
+              selfEditMode={selfEditMode}
+              onToggleSelfEdit={() => setSelfEditMode((m) => !m)}
+            />
           : <NpcStatBlock member={member} ownCharEditable={ownCharEditable} deepEditable={deepEditable} />
       ) : (
         <>
@@ -281,6 +288,19 @@ export default function CharacterModal({ member, onClose }) {
             </div>
           )}
 
+          {member.is_pc && isOwnChar && !canEdit && (
+            <div className="center" style={{ margin: '10px 0' }}>
+              <button
+                type="button"
+                className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
+                onClick={() => setSelfEditMode((m) => !m)}
+                title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
+              >
+                {selfEditMode ? 'Done' : 'Edit'}
+              </button>
+            </div>
+          )}
+
           <div style={{ marginTop: 14 }}>
             <div className="row-between">
               <label className="eyebrow">Details & stats</label>
@@ -308,18 +328,6 @@ export default function CharacterModal({ member, onClose }) {
           <hr className="rule" />
           <DiceRoller member={member} canRoll={ownCharEditable} />
         </>
-      )}
-
-      {member.is_pc && isOwnChar && !canEdit && (
-        <button
-          type="button"
-          className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
-          style={{ marginTop: 14 }}
-          onClick={() => setSelfEditMode((m) => !m)}
-          title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
-        >
-          {selfEditMode ? '✓ done editing' : '✏️ edit my character'}
-        </button>
       )}
 
       {(member.sheet_url || canEdit) && (

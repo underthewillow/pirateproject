@@ -12,7 +12,7 @@ const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 // `deepEditable` (ability scores/max HP — behind their edit-mode toggle) let
 // the crew member linked to this PC act on their own sheet without the
 // DM/admin canEdit flag; nobody else can roll or edit it either way.
-export default function StatBlock({ member, ownCharEditable = false, deepEditable = false }) {
+export default function StatBlock({ member, ownCharEditable = false, deepEditable = false, showEditToggle = false, selfEditMode = false, onToggleSelfEdit }) {
   const { patchItem, canEdit } = useData()
   const roller = useRoller()
   const s = member.sheet_data
@@ -117,6 +117,19 @@ export default function StatBlock({ member, ownCharEditable = false, deepEditabl
           )
         })}
       </div>
+
+      {showEditToggle && (
+        <div className="center" style={{ margin: '10px 0' }}>
+          <button
+            type="button"
+            className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
+            onClick={onToggleSelfEdit}
+            title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
+          >
+            {selfEditMode ? 'Done' : 'Edit'}
+          </button>
+        </div>
+      )}
 
       <div className="sb-section-title">Skills</div>
       <div className="sb-skills">
