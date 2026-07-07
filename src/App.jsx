@@ -5,7 +5,6 @@ import { TABS } from './config/tabs'
 import LoginPage from './components/LoginPage'
 import SettingsPage from './components/SettingsPage'
 import HamburgerMenu from './components/common/HamburgerMenu'
-import useInstallPrompt from './hooks/useInstallPrompt'
 
 // Remembers which tab/view was open across reloads — a plain page refresh
 // (or a mobile browser reloading a backgrounded tab) would otherwise always
@@ -29,7 +28,6 @@ export default function App() {
   const [active, setActive] = useState(() => loadNav().active)
   const [view, setView] = useState(() => loadNav().view)
   const [menuOpen, setMenuOpen] = useState(false)
-  const { canInstall, promptInstall } = useInstallPrompt()
 
   useEffect(() => {
     localStorage.setItem(NAV_KEY, JSON.stringify({ active, view }))
@@ -90,12 +88,6 @@ export default function App() {
             <span className="tab-icon">⚙</span>
             Settings
           </button>
-          {canInstall && (
-            <button className="drawer-item" onClick={() => { promptInstall(); setMenuOpen(false) }}>
-              <span className="tab-icon">📲</span>
-              Install app
-            </button>
-          )}
         </HamburgerMenu>
       )}
 

@@ -93,15 +93,6 @@ check in that feature's own component — no new plumbing.
 → `App`. Auth is nested inside `DataProvider` because it needs `settings`/`app_users` via
 `useData()`.
 
-**PWA.** `vite-plugin-pwa` (configured in `vite.config.js`) generates the manifest and a
-Workbox service worker at build time only (not in `npm run dev`); it precaches the built
-app shell so the site installs and loads offline, but never caches Supabase API/realtime
-traffic. Icons live in `public/icons/` (plain + maskable variants, generated from
-`public/assets/pirate.png`); `apple-touch-icon` is linked directly in `index.html` since
-iOS doesn't read the manifest for it. `src/hooks/useInstallPrompt.js` captures the
-browser's `beforeinstallprompt` event so the hamburger drawer can offer an "Install app"
-button instead of relying on the browser's own (often hidden) install UI.
-
 ## D&D Beyond sync
 
 Crew character sheets can sync from a public D&D Beyond character. The browser can't
