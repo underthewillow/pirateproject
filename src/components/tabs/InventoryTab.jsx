@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { useData } from '../../context/DataContext'
+import { useAppAuth } from '../../context/AuthContext'
 import { Draggable, Droppable } from '../common/Dnd'
 import Editable from '../common/Editable'
 import Modal from '../common/Modal'
@@ -102,6 +103,11 @@ export default function InventoryTab() {
     addItem, patchItem, removeItem, patchSingleton, setSetting, canEdit,
     isDM,
   } = useData()
+  const { hasRole } = useAppAuth()
+  // The ship's actual stores/cargo/party packs are crew business — any
+  // crew_member can manage them. Port/merchant setup and pricing stay
+  // DM/admin-only (isDM), same as before.
+  const canManageInventory = canEdit || hasRole('crew_member')
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [adding, setAdding] = useState(null) // { container } while the add-item dialog is open
   const [stockOpen, setStockOpen] = useState(false) // catalog picker modal
@@ -595,7 +601,7 @@ export default function InventoryTab() {
               <div key={c.id}>
                 <div className="row-between">
                   <div className="dropzone-label">📦 {c.title}</div>
-                  {canEdit && <button className="btn small ghost" onClick={() => addTo(c.id)}>+ item</button>}
+                  {canManageInventory && <button className="btn small ghost" onClick={() => addTo(c.id)}>+ item</button>}
                 </div>
                 <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>{c.hint} · {items.length} items</div>
                 <Droppable id={c.id} data={{ container: c.id }} className="dropzone">
@@ -604,20 +610,20 @@ export default function InventoryTab() {
                     {items.map((it) => {
                       const kind = KINDS[it.provision]
                       return (
-                      <Draggable key={it.id} id={it.id} data={{ container: it.container }} disabled={!canEdit}>
+                      <Draggable key={it.id} id={it.id} data={{ container: it.container }} disabled={!canManageInventory}>
                         <div className="card">
                           <div className="row-between">
                             <strong className="grow">
                               {kind ? kind.emoji + ' ' : ''}
-                              <Editable value={it.name} onCommit={(v) => patchItem('inventory', it.id, { name: v })} />
+                              <Editable value={it.name} editable={canManageInventory} onCommit={(v) => patchItem('inventory', it.id, { name: v })} />
                             </strong>
                             <span className="muted flex gap-sm" style={{ alignItems: 'center' }}>
-                              ×<Editable type="number" value={it.quantity} onCommit={(v) => patchItem('inventory', it.id, { quantity: v })} />
-                              {canEdit && <button className="btn small danger" onClick={() => removeItem('inventory', it.id)}>✕</button>}
+                              ×<Editable type="number" value={it.quantity} editable={canManageInventory} onCommit={(v) => patchItem('inventory', it.id, { quantity: v })} />
+                              {canManageInventory && <button className="btn small danger" onClick={() => removeItem('inventory', it.id)}>✕</button>}
                             </span>
                           </div>
 
-                          {canEdit && (
+                          {canManageInventory && (
                             <div className="flex gap-sm" style={{ alignItems: 'center', margin: '6px 0 2px', flexWrap: 'wrap' }}>
                               <select
                                 className="select"
@@ -631,7 +637,7 @@ export default function InventoryTab() {
                               </select>
                               {kind && (
                                 <span className="muted flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
-                                  <Editable type="number" value={it.servings ?? 1} onCommit={(v) => patchItem('inventory', it.id, { servings: v })} />
+                                  <Editable type="number" value={it.servings ?? 1} editable={canManageInventory} onCommit={(v) => patchItem('inventory', it.id, { servings: v })} />
                                   {kind.each}
                                 </span>
                               )}
@@ -646,7 +652,7 @@ export default function InventoryTab() {
                           )}
 
                           <div className="muted" style={{ fontSize: 14 }}>
-                            <Editable value={it.description} placeholder="describe it…" onCommit={(v) => patchItem('inventory', it.id, { description: v })} />
+                            <Editable value={it.description} placeholder="describe it…" editable={canManageInventory} onCommit={(v) => patchItem('inventory', it.id, { description: v })} />
                           </div>
                         </div>
                       </Draggable>
