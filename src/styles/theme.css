@@ -665,7 +665,7 @@ body {
 /* ---------- character portrait ---------- */
 .pc-star { color: var(--gold); margin-right: 4px; font-size: 13px; }
 .portrait-frame {
-  display: block; position: relative; margin: 14px auto 0;
+  display: block; position: relative; margin: 14px auto 0; padding: 0; font: inherit;
   width: fit-content; max-width: 100%;
   border: 1px solid var(--leather-darker); border-radius: var(--radius);
   background: linear-gradient(160deg, #1b1109, #0d0703);

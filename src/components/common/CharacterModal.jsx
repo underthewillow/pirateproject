@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { assetUrl } from '../../lib/asset'
 import Avatar from './Avatar'
 import Editable from './Editable'
 import Modal from './Modal'
+import Lightbox from './Lightbox'
 import DiceRoller, { abilityMod } from './DiceRoller'
 import StatBlock from './StatBlock'
 import NpcStatBlock from './NpcStatBlock'
@@ -27,6 +29,7 @@ const DEFAULT_PER_DAY = 1
 
 export default function CharacterModal({ member, onClose }) {
   const { patchItem, removeItem, addRole, removeRole, roles, canEdit } = useData()
+  const [showPortrait, setShowPortrait] = useState(false)
   if (!member) return null
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
@@ -86,10 +89,14 @@ export default function CharacterModal({ member, onClose }) {
       </div>
 
       {member.portrait_url && (
-        <a href={assetUrl(member.portrait_url)} target="_blank" rel="noreferrer" className="portrait-frame" title="Open full image">
+        <button type="button" onClick={() => setShowPortrait(true)} className="portrait-frame" title="Open full image">
           <img src={assetUrl(member.portrait_url)} alt={member.name} loading="lazy" />
           <span className="portrait-hint">⤢ open full {member.is_pc ? 'reference sheet' : 'image'}</span>
-        </a>
+        </button>
+      )}
+
+      {showPortrait && (
+        <Lightbox src={assetUrl(member.portrait_url)} alt={member.name} onClose={() => setShowPortrait(false)} />
       )}
 
       {member.stats?.condition && (
