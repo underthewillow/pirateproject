@@ -93,7 +93,7 @@ export default function StatBlock({ member, ownCharEditable = false, deepEditabl
           )}
         </div>
         <button className="sb-stat sb-click" disabled={!ownCharEditable} onClick={() => d20('Initiative', s.initiative)}>
-          <div className="sb-stat-num">{fmt(s.initiative)}</div><div className="sb-stat-lbl">Initiative ⚄</div>
+          <div className="sb-stat-num">{fmt(s.initiative)}</div><div className="sb-stat-lbl">Initiative</div>
         </button>
         <div className="sb-stat"><div className="sb-stat-num">{s.speed}<span className="muted" style={{ fontSize: 12 }}>ft</span></div><div className="sb-stat-lbl">Speed</div></div>
         <div className="sb-stat"><div className="sb-stat-num">+{s.profBonus}</div><div className="sb-stat-lbl">Prof</div></div>

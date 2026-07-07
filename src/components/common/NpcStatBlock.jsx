@@ -125,7 +125,7 @@ export default function NpcStatBlock({ member, ownCharEditable = false, deepEdit
           )}
         </div>
         <button className="sb-stat sb-click" disabled={!ownCharEditable} onClick={() => d20('Initiative', mod('DEX'))}>
-          <div className="sb-stat-num">{fmt(mod('DEX'))}</div><div className="sb-stat-lbl">Initiative ⚄</div>
+          <div className="sb-stat-num">{fmt(mod('DEX'))}</div><div className="sb-stat-lbl">Initiative</div>
         </button>
         <div className="sb-stat">
           <div className="sb-stat-num">
