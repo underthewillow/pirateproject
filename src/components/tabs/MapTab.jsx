@@ -137,6 +137,11 @@ export default function MapTab() {
   const [view, setView] = useState({ s: 1, tx: 0, ty: 0 })
   const [openId, setOpenId] = useState(null)
   const [placing, setPlacing] = useState(false)
+  // DM/admin markers were draggable by default, so an accidental drag while
+  // just trying to tap one (easy to trigger, especially on a touchscreen)
+  // would silently relocate it. Off by default each session — same locked
+  // behavior a player sees — until explicitly switched on to rearrange pins.
+  const [moveMode, setMoveMode] = useState(false)
   const [localPos, setLocalPos] = useState(null) // {id,x,y} while dragging a marker
 
   const svgRef = useRef(null)
@@ -338,7 +343,7 @@ export default function MapTab() {
     if (!d) return
     e.stopPropagation()
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 8) d.moved = true
-    if (d.moved && canEdit) {
+    if (d.moved && canEdit && moveMode) {
       const w = worldFromClient(e.clientX, e.clientY)
       setLocalPos({ id: d.id, x: clamp(w.x, 0, W), y: clamp(w.y, 0, H) })
     }
@@ -350,7 +355,7 @@ export default function MapTab() {
     markerDrag.current = null
     setLocalPos(null)
     if (!d) return
-    if (d.moved && canEdit) {
+    if (d.moved && canEdit && moveMode) {
       const w = worldFromClient(e.clientX, e.clientY)
       patchItem('locations', loc.id, { x: Math.round(clamp(w.x, 0, W)), y: Math.round(clamp(w.y, 0, H)), region: regionAt(regions, w.x, w.y) })
     } else if (loc.discovered || canEdit) {
@@ -482,7 +487,7 @@ export default function MapTab() {
                     ref={(node) => { if (node) markerRefs.current.set(l.id, node); else markerRefs.current.delete(l.id) }}
                     className="map-marker"
                     transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
-                    style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1 }}
+                    style={{ cursor: canEdit && moveMode ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1 }}
                     onPointerDown={(e) => onMarkerDown(e, l)}
                     onPointerMove={onMarkerMove}
                     onPointerUp={(e) => onMarkerUp(e, l)}
@@ -514,6 +519,15 @@ export default function MapTab() {
             {canEdit && (
               <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => setPlacing((p) => !p)}>
                 {placing ? '✕ cancel' : '＋ marker'}
+              </button>
+            )}
+            {canEdit && (
+              <button
+                className={`map-btn wide ${moveMode ? 'active' : ''}`}
+                title="When off, tapping a marker just opens it — same as a player sees — so an accidental drag can't relocate it"
+                onClick={() => setMoveMode((m) => !m)}
+              >
+                {moveMode ? '🔓 move pins' : '🔒 pins locked'}
               </button>
             )}
           </div>
