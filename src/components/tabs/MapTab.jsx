@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { assetUrl } from '../../lib/asset'
 import Editable from '../common/Editable'
@@ -77,9 +77,9 @@ function shapeMarkup(s) {
 // desktop, laggy on iOS — is what pointed at this specifically. Baking it to
 // a plain PNG once (whenever the charted regions actually change) turns the
 // per-frame cost into "transform a static image," which is cheap everywhere.
-function buildFogDataUrl(W, H, chartedRegions) {
+function buildFogSvgMarkup(W, H, chartedRegions) {
   const cutouts = chartedRegions.flatMap((r) => (r.shapes || []).map(shapeMarkup)).join('')
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
       <filter id="soft"><feGaussianBlur stdDeviation="26"/></filter>
       <filter id="fognoise">
@@ -100,7 +100,35 @@ function buildFogDataUrl(W, H, chartedRegions) {
         style="font: italic 600 26px Cinzel, 'IM Fell English SC', serif; fill:#d8c8a6">terra incognita</text>
     </g>
   </svg>`
-  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
+}
+// Rasterizing through an actual <canvas> (HTML <img> → drawImage → PNG) is a
+// far more battle-tested cross-browser path for "bake filter effects into a
+// bitmap" than referencing an SVG-with-filters directly as an <image> src —
+// the latter turned out to just drop the blur/noise filters and render the
+// cutouts' raw bounding box in both Chromium and Safari. This hook rebuilds
+// the fog PNG only when the actual content changes (not on every pan/zoom
+// frame), and keeps the previous image on screen while the new one decodes
+// so charting a new region doesn't flash back to a fully-fogged map.
+function useFogImage(W, H, chartedRegions) {
+  const [dataUrl, setDataUrl] = useState(null)
+  const key = chartedRegions.map((r) => r.key).join(',')
+  useEffect(() => {
+    let cancelled = false
+    const svgMarkup = buildFogSvgMarkup(W, H, chartedRegions)
+    const img = new Image()
+    img.onload = () => {
+      if (cancelled) return
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      canvas.getContext('2d').drawImage(img, 0, 0, W, H)
+      setDataUrl(canvas.toDataURL('image/png'))
+    }
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgMarkup)))}`
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [W, H, key])
+  return dataUrl
 }
 
 export default function MapTab() {
@@ -317,11 +345,8 @@ export default function MapTab() {
   const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
   // Only rebuilds when the actual fog content changes (charting a new region,
-  // switching charts) — not on every pan/zoom frame. See buildFogDataUrl.
-  const fogDataUrl = useMemo(
-    () => buildFogDataUrl(W, H, chartedRegions),
-    [W, H, chartedRegions.map((r) => r.key).join(',')]
-  )
+  // switching charts) — not on every pan/zoom frame. See useFogImage.
+  const fogDataUrl = useFogImage(W, H, chartedRegions)
   // Cached for zoomImperative, which runs outside React's render cycle and
   // needs the current marker list/drag position without stale closures.
   markersRef.current = visible
@@ -400,9 +425,13 @@ export default function MapTab() {
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
               {/* fog of war over everything not yet charted — pre-rendered
-                  (see buildFogDataUrl) instead of a live filter, so panning/
-                  zooming only ever transforms a plain bitmap */}
-              <image href={fogDataUrl} x="0" y="0" width={W} height={H} pointerEvents="none" clipPath="url(#mapclip)" />
+                  (see useFogImage) instead of a live filter, so panning/
+                  zooming only ever transforms a plain bitmap. Fully-fogged
+                  placeholder rect covers the brief gap before the first
+                  raster finishes decoding, rather than flashing the bare map. */}
+              {fogDataUrl
+                ? <image href={fogDataUrl} x="0" y="0" width={W} height={H} pointerEvents="none" clipPath="url(#mapclip)" />
+                : <rect x="0" y="0" width={W} height={H} fill="#1f2b31" opacity="0.92" pointerEvents="none" />}
 
               {/* markers */}
               {visible.map((l) => {
