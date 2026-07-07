@@ -48,9 +48,11 @@ export default function CharacterModal({ member, onClose }) {
   // and, new as of this pass, rolling is no longer open to everyone; only
   // the character's own player (or the DM) can roll on their behalf.
   const ownCharEditable = canEdit || isOwnChar
-  // Ability scores, max HP, condition, bio: behind the edit-mode toggle for
-  // a self-editing crew member (DM/admin never needs the toggle).
-  const deepEditable = canEdit || (isOwnChar && selfEditMode)
+  // Ability scores, max HP, condition, bio: behind the edit-mode toggle for a
+  // self-editing crew member — but only for a linked PC. NPCs are DM-authored
+  // stat blocks; a player handed one stays limited to current HP, same as
+  // everyone else, with no deeper self-edit tier at all.
+  const deepEditable = canEdit || (member.is_pc && isOwnChar && selfEditMode)
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
@@ -118,18 +120,6 @@ export default function CharacterModal({ member, onClose }) {
 
       {showPortrait && (
         <Lightbox src={assetUrl(member.portrait_url)} alt={member.name} onClose={() => setShowPortrait(false)} />
-      )}
-
-      {isOwnChar && !canEdit && (
-        <button
-          type="button"
-          className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
-          style={{ marginTop: 10 }}
-          onClick={() => setSelfEditMode((m) => !m)}
-          title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
-        >
-          {selfEditMode ? '✓ done editing' : '✏️ edit my character'}
-        </button>
       )}
 
       {member.stats?.condition && (
@@ -318,6 +308,18 @@ export default function CharacterModal({ member, onClose }) {
           <hr className="rule" />
           <DiceRoller member={member} canRoll={ownCharEditable} />
         </>
+      )}
+
+      {member.is_pc && isOwnChar && !canEdit && (
+        <button
+          type="button"
+          className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
+          style={{ marginTop: 14 }}
+          onClick={() => setSelfEditMode((m) => !m)}
+          title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
+        >
+          {selfEditMode ? '✓ done editing' : '✏️ edit my character'}
+        </button>
       )}
 
       {(member.sheet_url || canEdit) && (
