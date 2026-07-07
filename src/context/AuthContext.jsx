@@ -162,6 +162,14 @@ export function AppAuthProvider({ children }) {
       scope="openid profile email offline_access"
       userStore={oidcUserStore}
       automaticSilentRenew={oidcConfigured}
+      // Without this, oidc-client-ts renews the access token via a hidden
+      // iframe back to the IdP, which depends on a third-party session
+      // cookie — blocked by default in every modern browser. That silent
+      // failure is why sessions appeared to "not persist": the access token
+      // expires, the iframe renew fails invisibly, and the user gets bounced
+      // to the login page despite holding a perfectly valid refresh token
+      // (from the offline_access scope) the whole time.
+      useRefreshToken={oidcConfigured}
       onSigninCallback={() => {
         window.history.replaceState({}, document.title, window.location.pathname)
       }}
