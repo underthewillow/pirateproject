@@ -1,14 +1,18 @@
 import { useRef, useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useRoller } from '../../context/RollContext'
-import { parseExpr, rollD20, fmt } from '../../lib/dice'
+import { parseExpr, rollD20, fmt, abilityMod } from '../../lib/dice'
+import Editable from './Editable'
 
 const ABBR = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
 
 // D&D-Beyond-style sheet for player characters, with click-to-roll everywhere.
 // Reads the imported `sheet_data`; every roll respects the Adv/Dis toggle.
-export default function StatBlock({ member }) {
+// `selfEditable` lets the crew member linked to this PC edit HP/ability
+// scores on their own sheet even without the DM/admin canEdit flag.
+export default function StatBlock({ member, selfEditable = false }) {
   const { patchItem, canEdit } = useData()
+  const editableSelf = canEdit || selfEditable
   const roller = useRoller()
   const s = member.sheet_data
   const [mode, setMode] = useState('normal')
@@ -28,6 +32,15 @@ export default function StatBlock({ member }) {
 
   const abils = s.abilities || {}
   const skills = s.skills || []
+  // Editing a raw score wouldn't mean much if the derived mod/save it's
+  // sitting next to (imported from D&D Beyond as independent numbers, not
+  // computed here) went stale — recompute both from the new score.
+  const setAbilityScore = (k, val) => {
+    const score = Number(val) || 0
+    const mod = abilityMod(score)
+    const a = abils[k] || {}
+    setSheet({ abilities: { ...abils, [k]: { ...a, score, mod, save: mod + (a.saveProf ? (s.profBonus || 0) : 0) } } })
+  }
 
   return (
     <div className="statblock">
@@ -59,13 +72,18 @@ export default function StatBlock({ member }) {
         </div>
         <div className="sb-stat sb-hp">
           <div className="sb-stat-num">
-            {canEdit
+            {editableSelf
               ? <input className="input sb-hp-input" type="number" value={cur} onChange={(e) => setHp(e.target.value)} />
               : cur}
-            <span className="muted" style={{ fontSize: 14 }}> / {s.maxHp}</span>
+            <span className="muted" style={{ fontSize: 14 }}>
+              {' / '}
+              {editableSelf
+                ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} />
+                : s.maxHp}
+            </span>
           </div>
           <div className="sb-stat-lbl">Hit Points</div>
-          {canEdit && (
+          {editableSelf && (
             <div className="sb-hp-btns">
               <button className="btn small danger" onClick={() => setHp(cur - 1)}>−</button>
               <button className="btn small" onClick={() => setHp(cur + 1)}>+</button>
@@ -88,7 +106,9 @@ export default function StatBlock({ member }) {
             <div className="sb-abil" key={k}>
               <div className="sb-abil-abbr">{k}</div>
               <button className="sb-abil-mod sb-click" onClick={() => d20(`${k} check`, a.mod)} title="Roll ability check">{fmt(a.mod)}</button>
-              <div className="sb-abil-score">{a.score}</div>
+              {editableSelf
+                ? <input className="input ability-input" type="number" value={a.score ?? ''} onChange={(e) => setAbilityScore(k, e.target.value)} />
+                : <div className="sb-abil-score">{a.score}</div>}
               <button className="sb-abil-save sb-click" onClick={() => d20(`${k} save`, a.save)} title="Roll saving throw">
                 save {fmt(a.save)}{a.saveProf ? ' ●' : ''}
               </button>

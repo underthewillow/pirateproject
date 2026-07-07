@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../../context/DataContext'
+import { useAppAuth } from '../../context/AuthContext'
 import { assetUrl } from '../../lib/asset'
 import Avatar from './Avatar'
 import Editable from './Editable'
@@ -29,8 +30,16 @@ const DEFAULT_PER_DAY = 1
 
 export default function CharacterModal({ member, onClose }) {
   const { patchItem, removeItem, addRole, removeRole, roles, canEdit } = useData()
+  const { identity } = useAppAuth()
   const [showPortrait, setShowPortrait] = useState(false)
   if (!member) return null
+
+  // A crew member gets self-service editing (HP, condition, bio, ability
+  // scores) on whichever character(s) they're linked to — PC or NPC alike,
+  // ownership is what matters here, not is_pc. Everything else on this card
+  // (roster management, roles, hiding, image URLs, etc.) stays DM/admin-only.
+  const isOwnChar = !!identity?.linkedCrewIds?.includes(member.id)
+  const selfEditable = canEdit || isOwnChar
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
@@ -83,6 +92,7 @@ export default function CharacterModal({ member, onClose }) {
             className="eyebrow"
             placeholder="add a title / epithet"
             value={member.title}
+            editable={selfEditable}
             onCommit={(v) => patchItem('crew', member.id, { title: v })}
           />
         </div>
@@ -121,16 +131,18 @@ export default function CharacterModal({ member, onClose }) {
             {canEdit && rk !== 'passenger' && <button className="btn small ghost" onClick={demote} title="Lower standing">▾ demote</button>}
           </div>
           {rk === 'recruit' && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Ink the Black Knot to make them full crew — the tattoo is the initiation.</p>}
-          <div style={{ marginTop: 10 }}>
-            <label className="eyebrow">Condition</label>
-            <Editable
-              value={member.stats?.condition}
-              placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
-              onCommit={(v) => setStats({ ...stats, condition: v })}
-            />
-          </div>
         </div>
       )}
+
+      <div style={{ marginBottom: 14 }}>
+        <label className="eyebrow">Condition</label>
+        <Editable
+          value={member.stats?.condition}
+          placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
+          editable={selfEditable}
+          onCommit={(v) => setStats({ ...stats, condition: v })}
+        />
+      </div>
 
       <div>
         <label className="eyebrow">Whereabouts</label>
@@ -217,12 +229,15 @@ export default function CharacterModal({ member, onClose }) {
           multiline
           placeholder="Write what's known of this soul…"
           value={member.bio}
+          editable={selfEditable}
           onCommit={(v) => patchItem('crew', member.id, { bio: v })}
         />
       </div>
 
       {member.sheet_data ? (
-        member.is_pc ? <StatBlock member={member} /> : <NpcStatBlock member={member} />
+        member.is_pc
+          ? <StatBlock member={member} selfEditable={selfEditable} />
+          : <NpcStatBlock member={member} selfEditable={selfEditable} />
       ) : (
         <>
           {(member.is_pc || ABILITIES.some((a) => abilityValue(a) !== '')) && (
@@ -234,7 +249,7 @@ export default function CharacterModal({ member, onClose }) {
                   return (
                     <div className="ability" key={a}>
                       <div className="ability-abbr">{a}</div>
-                      {canEdit ? (
+                      {selfEditable ? (
                         <input
                           className="input ability-input"
                           type="number"

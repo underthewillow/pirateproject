@@ -31,9 +31,12 @@ function UsesTicker({ max, used, onChange }) {
 }
 
 // Editable, rollable stat block for NPC crew (distinct from the D&D-Beyond PC
-// sheet). Everything is editable when the log is unlocked (admin / DM).
-export default function NpcStatBlock({ member }) {
+// sheet). Most of it is editable only when the log is unlocked (admin / DM);
+// `selfEditable` additionally opens HP/ability scores to whoever this NPC is
+// linked to (same self-service tier a linked PC gets).
+export default function NpcStatBlock({ member, selfEditable = false }) {
   const { patchItem, canEdit } = useData()
+  const editableSelf = canEdit || selfEditable
   const roller = useRoller()
   const [mode, setMode] = useState('normal')
 
@@ -107,15 +110,19 @@ export default function NpcStatBlock({ member }) {
         </div>
         <div className="sb-stat sb-hp">
           <div className="sb-stat-num">
-            <input className="input sb-hp-input" type="number" value={hpCur} onChange={(e) => setHp(e.target.value)} />
-            <span className="muted" style={{ fontSize: 14 }}> / {canEdit ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} /> : s.maxHp}</span>
+            {editableSelf
+              ? <input className="input sb-hp-input" type="number" value={hpCur} onChange={(e) => setHp(e.target.value)} />
+              : hpCur}
+            <span className="muted" style={{ fontSize: 14 }}> / {editableSelf ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} /> : s.maxHp}</span>
           </div>
           <div className="sb-stat-lbl">Hit Points</div>
-          <div className="sb-hp-btns">
-            <button className="btn small danger" onClick={() => setHp(hpCur - 1)}>−</button>
-            <button className="btn small" onClick={() => setHp(hpCur + 1)}>+</button>
-            <button className="btn small ghost" onClick={() => setHp(s.maxHp)}>full</button>
-          </div>
+          {editableSelf && (
+            <div className="sb-hp-btns">
+              <button className="btn small danger" onClick={() => setHp(hpCur - 1)}>−</button>
+              <button className="btn small" onClick={() => setHp(hpCur + 1)}>+</button>
+              <button className="btn small ghost" onClick={() => setHp(s.maxHp)}>full</button>
+            </div>
+          )}
         </div>
         <button className="sb-stat sb-click" onClick={() => d20('Initiative', mod('DEX'))}>
           <div className="sb-stat-num">{fmt(mod('DEX'))}</div><div className="sb-stat-lbl">Initiative ⚄</div>
@@ -135,7 +142,7 @@ export default function NpcStatBlock({ member }) {
           <div className="sb-abil" key={ab}>
             <div className="sb-abil-abbr">{ab}</div>
             <button className="sb-abil-mod sb-click" onClick={() => d20(`${ab} check`, mod(ab))} title="Roll ability check">{fmt(mod(ab))}</button>
-            {canEdit
+            {editableSelf
               ? <input className="input ability-input" type="number" value={abilities[ab] ?? 10} onChange={(e) => setSheet({ abilities: { ...abilities, [ab]: Number(e.target.value) } })} />
               : <div className="sb-abil-score">{abilities[ab] ?? 10}</div>}
             <button className="sb-abil-save sb-click" onClick={() => d20(`${ab} save`, saveMod(ab))} title="Roll saving throw">
