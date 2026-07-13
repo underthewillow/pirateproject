@@ -64,7 +64,9 @@ export default function CrewTab() {
                 <div className="crew-cards">
                   {members.length === 0 && <span className="role-empty">— empty —</span>}
                   {members.map((m) => (
-                    <Draggable key={m.id} id={m.id} data={{ location: m.location }} disabled={!canEdit}>
+                    // Anyone — players and the DM alike — can reorganise the roster
+                    // by dragging cards between stations.
+                    <Draggable key={m.id} id={m.id} data={{ location: m.location }}>
                       <CrewCard member={m} onOpen={() => setOpenId(m.id)} />
                     </Draggable>
                   ))}
