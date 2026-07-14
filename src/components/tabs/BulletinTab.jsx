@@ -28,6 +28,7 @@ export default function BulletinTab() {
   const { identity, hasRole } = useAppAuth()
   const [lightbox, setLightbox] = useState(null)
   const [pasteBusy, setPasteBusy] = useState(false)
+  const [editingId, setEditingId] = useState(null) // note whose edit controls are shown
 
   // Any crew member can post/edit their own; the DM can manage anyone's.
   const canContribute = canEdit || hasRole('crew_member')
@@ -41,8 +42,8 @@ export default function BulletinTab() {
   // A private post is visible only to the DM and whoever plays the target PC.
   const visibleNotes = bulletinNotes.filter((n) => !n.target_crew_id || isDM || myCharIds.has(n.target_crew_id))
 
-  const addNote = () =>
-    addItem('bulletinNotes', {
+  const addNote = async () => {
+    const row = await addItem('bulletinNotes', {
       body: '',
       image_url: null,
       target_crew_id: null,
@@ -50,6 +51,8 @@ export default function BulletinTab() {
       user_id: identity?.id ?? null,
       sort_order: bulletinNotes.length + 1,
     })
+    if (row?.id) setEditingId(row.id) // open a fresh post ready to edit
+  }
 
   const saveScratch = (v) => { if (identity?.id) patchItem('appUsers', identity.id, { scratch_pad: v }) }
 
@@ -124,7 +127,7 @@ export default function BulletinTab() {
                   placeholder="Write a note…"
                   value={n.body}
                   onCommit={(v) => patchItem('bulletinNotes', n.id, { body: v })} />
-                {canManage(n) && (
+                {canManage(n) && editingId === n.id && (
                   <div className="note-controls">
                     <ImageInput value={n.image_url} folder="scuttlebutt" showPreview={false}
                       onCommit={(v) => patchItem('bulletinNotes', n.id, { image_url: v })} />
@@ -140,7 +143,14 @@ export default function BulletinTab() {
                 <div className="note-foot">
                   <span className="note-author">— {n.author || 'A hand'}{n.created_at ? `, ${formatDate(n.created_at)}` : ''}</span>
                   {canManage(n) && (
-                    <button className="btn small danger" onClick={() => removeItem('bulletinNotes', n.id)}>Remove</button>
+                    editingId === n.id ? (
+                      <span className="flex gap-sm">
+                        <button className="btn small ghost" onClick={() => setEditingId(null)}>Done</button>
+                        <button className="btn small danger" onClick={() => { removeItem('bulletinNotes', n.id); setEditingId((id) => (id === n.id ? null : id)) }}>Remove</button>
+                      </span>
+                    ) : (
+                      <button className="btn small ghost" onClick={() => setEditingId(n.id)}>✎ Edit</button>
+                    )
                   )}
                 </div>
               </div>
