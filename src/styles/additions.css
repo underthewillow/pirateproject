@@ -36,6 +36,9 @@
   letter-spacing: 0.4px; padding: 1px 8px; border-radius: 9px; border: 1px solid;
 }
 .npc-rank.big { font-size: 13px; padding: 3px 12px; border-radius: 12px; margin-top: 0; }
+.rank-hostile { background: rgba(116,36,32,0.18); border-color: var(--wax-red); color: var(--wax-red); }
+.rank-neutral { background: rgba(90,90,90,0.16); border-color: #808080; color: #5a5a5a; }
+.rank-friendly { background: rgba(46,122,58,0.18); border-color: #2e7a3a; color: #2e7a3a; }
 .rank-passenger { background: rgba(90,110,130,0.18); border-color: #5a7382; color: #37505e; }
 .rank-recruit { background: rgba(176,141,63,0.20); border-color: var(--brass); color: #6a5220; }
 .rank-crew { background: linear-gradient(160deg, var(--leather-light), var(--leather-dark)); border-color: var(--leather-darker); color: var(--brass-light); }

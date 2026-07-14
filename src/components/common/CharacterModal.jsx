@@ -10,14 +10,13 @@ import Lightbox from './Lightbox'
 import DiceRoller, { abilityMod } from './DiceRoller'
 import StatBlock from './StatBlock'
 import NpcStatBlock from './NpcStatBlock'
-import { RANK_KEYS, rankKey, rankLabel } from '../../lib/ranks'
+import { RANKS, rankKey, rankLabel } from '../../lib/ranks'
 
 const LOCATIONS = [
   { value: 'ship', label: 'On the Ship' },
   { value: 'passenger', label: 'Passenger' },
-  { value: 'met', label: 'The Gangplank (newly met)' },
   { value: 'shore', label: 'Ashore' },
-  { value: 'available', label: 'Available (reserve)' },
+  { value: 'met', label: 'The Gangplank (newly met)' },
 ]
 
 const ABILITIES = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
@@ -63,12 +62,9 @@ export default function CharacterModal({ member, onClose }) {
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
   const setStats = (next) => patchItem('crew', member.id, { stats: next })
 
-  // Crew standing (rank) + condition. Anyone may promote; only the DM demotes.
+  // Crew standing (rank) — the DM sets it directly (newly-met souls default to
+  // neutral; move them up to friendly/passenger/crew, or down to hostile).
   const rk = rankKey(member)
-  const rkIdx = RANK_KEYS.indexOf(rk)
-  const promote = () => { if (rkIdx < RANK_KEYS.length - 1) setStats({ ...stats, rank: RANK_KEYS[rkIdx + 1] }) }
-  const demote = () => { if (rkIdx > 0) setStats({ ...stats, rank: RANK_KEYS[rkIdx - 1] }) }
-  const promoteLabel = rk === 'passenger' ? 'Sign on as recruit' : 'Ink the Black Knot ⚓'
 
   // DM staging: hidden characters are invisible to the crew until revealed.
   const hidden = !!member.stats?.hidden
@@ -145,10 +141,14 @@ export default function CharacterModal({ member, onClose }) {
           <label className="eyebrow">Standing aboard</label>
           <div className="flex wrap gap-sm" style={{ alignItems: 'center', marginTop: 6 }}>
             <span className={`npc-rank big rank-${rk}`}>{rankLabel(rk)}</span>
-            {rk !== 'crew' && <button className="btn small brass" onClick={promote}>{promoteLabel}</button>}
-            {canEdit && rk !== 'passenger' && <button className="btn small ghost" onClick={demote} title="Lower standing">▾ demote</button>}
+            {canEdit && (
+              <select className="select" style={{ maxWidth: 200 }} value={rk}
+                onChange={(e) => setStats({ ...stats, rank: e.target.value })}>
+                {RANKS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+            )}
           </div>
-          {rk === 'recruit' && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Ink the Black Knot to make them full crew — the tattoo is the initiation.</p>}
+          {canEdit && rk === 'recruit' && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Ink the Black Knot (set “Black Knot Crew”) to make them full crew — the tattoo is the initiation.</p>}
         </div>
       )}
 

@@ -6,11 +6,13 @@ import CharacterModal from '../common/CharacterModal'
 const ZONES = [
   { id: 'ship', title: 'Aboard the Ship', icon: '⚓', note: 'Hands currently sailing with us.' },
   { id: 'passenger', title: 'Passengers', icon: '🧳', note: 'Temporary guests aboard — they can’t stay overnight or long rest on the ship.' },
-  { id: 'met', title: 'The Gangplank', icon: '🪜', note: 'Newly met souls — not yet crew, passengers, or sent on their way. A place to stage arrivals and hold the undecided.' },
   { id: 'shore', title: 'Ashore', icon: '🏝️', note: 'Off the ship — in port or elsewhere.' },
-  { id: 'available', title: 'Available Crew', icon: '🛟', note: 'Reserve hands. Tap a hand’s station badge to post them.' },
+  // The Gangplank sits at the bottom: newly met souls, not yet placed. It also
+  // catches anyone whose station is unset/legacy so no one goes missing.
+  { id: 'met', title: 'The Gangplank', icon: '🪜', note: 'Newly met souls — not yet crew, passengers, or sent on their way. A place to stage arrivals and hold the undecided.' },
 ]
 const ZONE_BY_ID = Object.fromEntries(ZONES.map((z) => [z.id, z]))
+const KNOWN_ZONES = new Set(ZONES.map((z) => z.id))
 
 export default function CrewTab() {
   const { crew, ship, patchItem, addItem, canEdit } = useData()
@@ -24,7 +26,7 @@ export default function CrewTab() {
     // New characters start hidden from the crew so the DM can flesh them out
     // and reveal them deliberately. Toggle "Hidden from crew" off in the sheet
     // (or hit "Reveal to crew") when they should appear.
-    const member = await addItem('crew', { name, location: 'available', sort_order: crew.length + 1, stats: { hidden: true } })
+    const member = await addItem('crew', { name, location: 'met', sort_order: crew.length + 1, stats: { hidden: true } })
     setOpenId(member.id)
   }
 
@@ -47,7 +49,9 @@ export default function CrewTab() {
 
       <div className="panel-grid" style={{ gap: 18 }}>
         {ZONES.map((z) => {
-          const members = crew.filter((c) => c.location === z.id)
+          const members = crew.filter((c) =>
+            z.id === 'met' ? (c.location === 'met' || !KNOWN_ZONES.has(c.location)) : c.location === z.id
+          )
           return (
             <div key={z.id} className="dropzone">
               <div className="row-between">
@@ -59,7 +63,7 @@ export default function CrewTab() {
               <div className="crew-cards">
                 {members.length === 0 && <span className="role-empty">— empty —</span>}
                 {members.map((m) => {
-                  const here = ZONE_BY_ID[m.location] || ZONES[0]
+                  const here = ZONE_BY_ID[m.location] || ZONE_BY_ID.met
                   return (
                     // Anyone — players and the DM alike — can reorganise the
                     // roster by re-stationing a hand from its station badge.
