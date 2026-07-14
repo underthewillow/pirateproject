@@ -213,7 +213,7 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .rolllog-row.fumble { border-left-color: var(--wax-red); background: rgba(116,36,32,0.14); }
 .rolllog-row.fumble .rolllog-total { color: var(--wax-red); }
 
-/* ---- Cork Board tab (issue #31) ---- */
+/* ---- Scuttlebutt board (issues #31 / #22 / #21) ---- */
 .corkboard {
   margin-top: 16px;
   padding: 22px 18px;
@@ -228,26 +228,50 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   background-size: 90px 90px, 120px 120px, 70px 70px, 100px 100px;
   box-shadow: inset 0 0 40px rgba(0,0,0,0.35);
 }
-.note { padding: 16px 16px 12px; display: flex; flex-direction: column; }
-.note-body { white-space: pre-wrap; line-height: 1.55; min-height: 40px; flex: 1; }
+/* Masonry: notes flow into responsive columns and size to their own content
+   (a short note stays short; one with a big image grows) instead of being
+   stretched to a uniform grid cell. */
+.cork-grid { columns: 240px; column-gap: 22px; }
+.cork-grid > .muted { column-span: all; }
+.note {
+  padding: 16px 16px 12px;
+  display: flex; flex-direction: column;
+  break-inside: avoid; -webkit-column-break-inside: avoid;
+  margin-bottom: 22px; width: 100%;
+}
+.note-body { white-space: pre-wrap; line-height: 1.55; min-height: 32px; flex: 1; }
+.note-img {
+  display: block; width: 100%; height: auto; cursor: zoom-in;
+  border-radius: 3px; margin-bottom: 10px;
+  border: 1px solid var(--parchment-edge); box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
 .note-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--ink-faded);
 }
 .note-author { font-family: var(--font-sc, var(--font-ui)); font-size: 12px; color: var(--ink-soft); font-style: italic; }
 
+/* private (targeted) posts */
+.note-private { border-left: 4px solid var(--wax-red); }
+.note-private-badge {
+  font-family: var(--font-sc, var(--font-ui)); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; color: var(--wax-red); margin-bottom: 8px;
+}
+/* author-only edit controls (image upload, visibility) */
+.note-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.note-target { font-size: 12px; padding: 3px 6px; }
+
+/* Shared image chooser (ImageInput) — upload / paste URL / clear */
+.imageinput { display: flex; flex-direction: column; gap: 6px; }
+.imageinput-preview {
+  display: block; max-width: 100%; max-height: 160px; object-fit: cover;
+  border-radius: var(--radius); border: 1px solid var(--parchment-edge);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.imageinput-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.imageinput-upload { display: inline-flex; align-items: center; cursor: pointer; }
+.imageinput-upload.disabled { opacity: 0.6; pointer-events: none; }
+
 .scratchpad { margin-top: 10px; }
 .scratchpad-body { white-space: pre-wrap; line-height: 1.6; min-height: 90px; display: block; }
 .scratchpad-body .textarea, .scratchpad .textarea { min-height: 120px; }
-
-/* Sealed orders (DM ⇄ player private messages, issues #31 / #22) */
-.sealed {
-  border-left: 5px solid var(--wax-red);
-  background: rgba(116,36,32,0.07);
-}
-.sealed-body { white-space: pre-wrap; line-height: 1.6; min-height: 40px; display: block; }
-.dispatch-list { display: flex; flex-direction: column; gap: 12px; }
-.dispatch { border-left: 5px solid var(--brass); }
-.dispatch-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-.dispatch-name { font-family: var(--font-display); font-size: 17px; color: var(--ink); }
-.dispatch-roles { font-size: 12px; color: var(--ink-faded); font-style: italic; }

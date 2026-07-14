@@ -21,6 +21,6 @@ export const TABS = [
   { key: 'map', label: 'The Map', icon: '🗺', component: MapTab },
   { key: 'quests', label: 'Posterboard', icon: '📜', component: QuestsTab },
   { key: 'journal', label: 'Journal', icon: '📖', component: JournalTab },
-  { key: 'bulletin', label: 'Cork Board', icon: '📌', component: BulletinTab },
+  { key: 'bulletin', label: 'Scuttlebutt', icon: '📌', component: BulletinTab },
   { key: 'desk', label: 'Ruby Tooth’s Desk', icon: '🧭', component: DeskTab },
 ]
