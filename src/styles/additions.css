@@ -71,9 +71,36 @@
 
 /* ---- Crew board: compact character cards (the Helm's look, a size down) ---- */
 .crew-cards { display: flex; flex-wrap: wrap; gap: 10px; align-items: start; }
-.crew-card-wrap { width: 118px; display: flex; flex-direction: column; gap: 5px; }
-.crew-card-move { width: 100%; font-size: 12px; padding: 3px 6px; }
+.crew-card-wrap { position: relative; width: 118px; display: flex; flex-direction: column; align-items: center; }
 .role-appoint { width: 100%; }
+
+/* compact station badge/button under each crew card (reflects current station) */
+.crew-move-btn {
+  margin-top: 5px; /* small badge just below the card */
+  width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; line-height: 1; cursor: pointer;
+  background: rgba(247,236,210,0.96); border: 1px solid var(--parchment-edge);
+  box-shadow: 0 2px 5px rgba(40,23,12,0.4);
+}
+.crew-move-btn:hover { background: #fff; transform: translateY(-1px); }
+.crew-move-menu {
+  position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+  z-index: 30; min-width: 160px;
+  background: linear-gradient(180deg, var(--parchment-light), var(--parchment));
+  border: 1px solid var(--parchment-edge); border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.4); padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.crew-move-opt {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 8px; border-radius: 6px; border: none; background: none;
+  cursor: pointer; font-size: 13px; color: var(--ink); white-space: nowrap;
+}
+.crew-move-opt:hover { background: rgba(176,141,63,0.22); }
+.crew-move-opt.current { font-weight: 700; background: rgba(176,141,63,0.3); }
+.crew-move-opt-icon { width: 18px; text-align: center; }
+.crew-move-backdrop { position: fixed; inset: 0; z-index: 25; }
 .crew-card {
   width: 118px; display: flex; flex-direction: column; text-align: left; cursor: pointer; overflow: hidden;
   border-radius: 9px; background: rgba(255,250,235,0.5);
