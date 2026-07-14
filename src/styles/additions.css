@@ -130,27 +130,75 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   text-shadow: 0 1px 4px rgba(0,0,0,0.7);
 }
 
-/* ---- Roll Log tab (issue #23) ---- */
-.rolllog { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+/* ---- Roll Log drawer (issue #23) ---- */
+/* Slide-in side panel that pops open on every roll and can be dismissed. */
+.rolllog-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(340px, 88vw);
+  display: flex; flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(255,250,235,0.97), rgba(244,230,196,0.97));
+  border-left: 1px solid var(--parchment-edge);
+  box-shadow: -8px 0 26px rgba(0,0,0,0.4);
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+  z-index: 45;
+}
+.rolllog-drawer.open { transform: translateX(0); }
+
+.rolllog-drawer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--parchment-edge);
+  background: rgba(150,120,58,0.14);
+}
+.rolllog-drawer-title { font-family: var(--font-display); font-size: 20px; color: var(--ink); }
+.rolllog-drawer-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; color: var(--ink-soft); line-height: 1; padding: 4px;
+}
+.rolllog-drawer-close:hover { color: var(--ink); }
+.rolllog-drawer-body { flex: 1; overflow-y: auto; padding: 12px 12px 4px; }
+.rolllog-drawer-foot {
+  display: flex; gap: 8px; padding: 10px 12px;
+  border-top: 1px solid var(--parchment-edge);
+}
+
+/* Pull tab, always reachable; rides the drawer's edge when open. */
+.rolllog-handle {
+  position: fixed; right: 0; top: 45%;
+  z-index: 46;
+  width: 34px; height: 54px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; cursor: pointer;
+  background: linear-gradient(180deg, var(--brass-light), var(--brass));
+  color: #2a1a0c;
+  border: 1px solid var(--parchment-edge); border-right: none;
+  border-radius: 8px 0 0 8px;
+  box-shadow: -3px 2px 8px rgba(0,0,0,0.3);
+  transition: right 0.28s ease;
+}
+.rolllog-handle.shift { right: min(340px, 88vw); }
+
+.rolllog { display: flex; flex-direction: column; gap: 8px; }
 .rolllog-row {
-  display: flex; align-items: center; gap: 14px;
-  background: rgba(255,250,235,0.4);
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,250,235,0.55);
   border: 1px solid var(--parchment-edge);
   border-left: 5px solid var(--brass);
   border-radius: var(--radius);
-  padding: 8px 14px;
-  box-shadow: 0 2px 5px rgba(60,36,12,0.15);
+  padding: 7px 10px;
+  box-shadow: 0 1px 3px rgba(60,36,12,0.12);
 }
 .rolllog-total {
-  font-family: var(--font-display); font-size: 30px; line-height: 1;
-  min-width: 52px; text-align: center; color: var(--ink);
+  font-family: var(--font-display); font-size: 26px; line-height: 1;
+  min-width: 40px; text-align: center; color: var(--ink);
 }
 .rolllog-main { flex: 1; min-width: 0; }
 .rolllog-label { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.rolllog-detail { font-size: 13px; color: var(--ink-faded); margin-top: 2px; }
-.rolllog-meta { text-align: right; flex-shrink: 0; }
-.rolllog-roller { font-weight: 600; font-size: 14px; color: var(--ink-soft); }
-.rolllog-time { font-size: 12px; color: var(--ink-faded); margin-top: 2px; }
+.rolllog-detail { font-size: 12px; color: var(--ink-faded); margin-top: 2px; }
+.rolllog-sub { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; }
+.rolllog-roller { font-weight: 600; font-size: 13px; color: var(--ink-soft); }
+.rolllog-time { font-size: 11px; color: var(--ink-faded); }
 
 .rolllog-tag {
   font-family: var(--font-ui, sans-serif); font-size: 10px; font-weight: 700;
@@ -160,7 +208,7 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .rolllog-tag.fumble { background: var(--wax-red); }
 
 /* Highlight natural 20s (green) and natural 1s (red) */
-.rolllog-row.crit { border-left-color: #2e7a3a; background: rgba(46,122,58,0.14); }
+.rolllog-row.crit { border-left-color: #2e7a3a; background: rgba(46,122,58,0.16); }
 .rolllog-row.crit .rolllog-total { color: #2e7a3a; }
-.rolllog-row.fumble { border-left-color: var(--wax-red); background: rgba(116,36,32,0.12); }
+.rolllog-row.fumble { border-left-color: var(--wax-red); background: rgba(116,36,32,0.14); }
 .rolllog-row.fumble .rolllog-total { color: var(--wax-red); }
