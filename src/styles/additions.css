@@ -71,21 +71,23 @@
 
 /* ---- Crew board: compact character cards (the Helm's look, a size down) ---- */
 .crew-cards { display: flex; flex-wrap: wrap; gap: 10px; align-items: start; }
-.crew-card-wrap { position: relative; width: 118px; display: flex; flex-direction: column; align-items: center; }
+.crew-card-wrap { position: relative; width: 118px; }
 .role-appoint { width: 100%; }
 
-/* compact station badge/button under each crew card (reflects current station) */
+/* compact station badge in each card's bottom-right corner (reflects current
+   station). Lives in the wrapper, not the card, so the card's overflow:hidden
+   doesn't clip it. */
 .crew-move-btn {
-  margin-top: 5px; /* small badge just below the card */
-  width: 30px; height: 30px; border-radius: 50%;
+  position: absolute; right: 3px; bottom: 3px; z-index: 3;
+  width: 28px; height: 28px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 15px; line-height: 1; cursor: pointer;
-  background: rgba(247,236,210,0.96); border: 1px solid var(--parchment-edge);
-  box-shadow: 0 2px 5px rgba(40,23,12,0.4);
+  font-size: 14px; line-height: 1; cursor: pointer;
+  background: rgba(247,236,210,0.97); border: 1px solid var(--parchment-edge);
+  box-shadow: 0 2px 5px rgba(40,23,12,0.45);
 }
-.crew-move-btn:hover { background: #fff; transform: translateY(-1px); }
+.crew-move-btn:hover { background: #fff; }
 .crew-move-menu {
-  position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+  position: absolute; top: calc(100% + 2px); right: 0; left: auto;
   z-index: 30; min-width: 160px;
   background: linear-gradient(180deg, var(--parchment-light), var(--parchment));
   border: 1px solid var(--parchment-edge); border-radius: 8px;
