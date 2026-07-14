@@ -154,7 +154,8 @@ export function DataProvider({ children }) {
     const key = TABLE_TO_KEY[table]
     if (!key) return
     if (SINGLETONS[key]) {
-      setData((d) => ({ ...d, [key]: eventType === 'DELETE' ? null : newRow }))
+      // Merge, don't replace — see the UPDATE note below.
+      setData((d) => ({ ...d, [key]: eventType === 'DELETE' ? null : { ...(d[key] || {}), ...newRow } }))
       return
     }
     // collection
@@ -164,7 +165,14 @@ export function DataProvider({ children }) {
       if (eventType === 'INSERT') {
         next = list.some((r) => r.id === newRow.id) ? list : [...list, newRow]
       } else if (eventType === 'UPDATE') {
-        next = list.map((r) => (r.id === newRow.id ? newRow : r))
+        // Merge the incoming row over what we have rather than replacing it.
+        // Postgres omits unchanged TOASTed columns (e.g. the large
+        // crew_members.sheet_data jsonb) from a partial update's replication
+        // payload, so a change to just `location` would otherwise arrive with
+        // sheet_data absent and blow away HP/class locally. Merging keeps any
+        // field the payload doesn't carry. (0006 sets REPLICA IDENTITY FULL so
+        // the payload is complete; this is belt-and-suspenders.)
+        next = list.map((r) => (r.id === newRow.id ? { ...r, ...newRow } : r))
       } else {
         next = list.filter((r) => r.id !== oldRow.id)
       }
