@@ -76,6 +76,9 @@ export default function MapTab() {
   const [openId, setOpenId] = useState(null)
   const [placing, setPlacing] = useState(false)
   const [localPos, setLocalPos] = useState(null) // {id,x,y} while dragging a marker
+  const [erasing, setErasing] = useState(false)   // DM fog-eraser mode
+  const [brush, setBrush] = useState(90)           // eraser radius in map units
+  const [liveStroke, setLiveStroke] = useState(null) // in-progress eraser stroke
 
   const svgRef = useRef(null)
   const viewRef = useRef(view)
@@ -84,6 +87,7 @@ export default function MapTab() {
   const pinchRef = useRef(null)
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
+  const strokeRef = useRef(null) // points of the eraser stroke currently being drawn
 
   const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
   const W = chart.w || 1448
@@ -91,9 +95,12 @@ export default function MapTab() {
   const regions = chart.regions || []
   const charted = Array.isArray(settings?.charted_regions) ? settings.charted_regions : []
   const isCharted = (r) => !r || charted.includes(r)
+  // Free-hand fog reveals painted with the eraser. Each stroke: {chart, r, pts:[[x,y],…]}.
+  const fogReveals = Array.isArray(settings?.fog_reveals) ? settings.fog_reveals : []
+  const chartReveals = fogReveals.filter((s) => (s.chart || 'sea_of_swords') === chartKey)
 
   // reset the view whenever we switch charts
-  useEffect(() => { setView({ s: 1, tx: 0, ty: 0 }); setPlacing(false) }, [chartKey])
+  useEffect(() => { setView({ s: 1, tx: 0, ty: 0 }); setPlacing(false); setErasing(false); setLiveStroke(null) }, [chartKey])
 
   const clampView = useCallback((v) => {
     const s = clamp(v.s, 1, 6)
@@ -138,12 +145,30 @@ export default function MapTab() {
 
   // ---- background pan / pinch ----
   const onBgDown = (e) => {
+    if (erasing && canEdit) {
+      svgRef.current?.setPointerCapture?.(e.pointerId)
+      const w = worldFromClient(e.clientX, e.clientY)
+      strokeRef.current = [[Math.round(clamp(w.x, 0, W)), Math.round(clamp(w.y, 0, H))]]
+      setLiveStroke({ chart: chartKey, r: brush, pts: strokeRef.current.slice() })
+      return
+    }
     svgRef.current?.setPointerCapture?.(e.pointerId)
     if (pointers.current.size === 0) tapRef.current = { x: e.clientX, y: e.clientY }
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     pinchRef.current = null
   }
   const onBgMove = (e) => {
+    if (erasing && canEdit) {
+      if (!strokeRef.current) return
+      const w = worldFromClient(e.clientX, e.clientY)
+      const pts = strokeRef.current
+      const last = pts[pts.length - 1]
+      if (Math.hypot(w.x - last[0], w.y - last[1]) >= brush * 0.35) {
+        pts.push([Math.round(clamp(w.x, 0, W)), Math.round(clamp(w.y, 0, H))])
+        setLiveStroke({ chart: chartKey, r: brush, pts: pts.slice() })
+      }
+      return
+    }
     if (!pointers.current.has(e.pointerId)) return
     const prev = pointers.current.get(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -161,6 +186,14 @@ export default function MapTab() {
     }
   }
   const onBgUp = (e) => {
+    if (erasing && canEdit) {
+      svgRef.current?.releasePointerCapture?.(e.pointerId)
+      const pts = strokeRef.current
+      strokeRef.current = null
+      setLiveStroke(null)
+      if (pts && pts.length) setSetting('fog_reveals', [...fogReveals, { chart: chartKey, r: brush, pts }])
+      return
+    }
     svgRef.current?.releasePointerCapture?.(e.pointerId)
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinchRef.current = null
@@ -224,6 +257,13 @@ export default function MapTab() {
     set.has(key) ? set.delete(key) : set.add(key)
     setSetting('charted_regions', [...set])
   }
+  // undo the last eraser stroke on this chart; clear wipes them all (this chart only)
+  const undoErase = () => {
+    let last = -1
+    fogReveals.forEach((s, i) => { if ((s.chart || 'sea_of_swords') === chartKey) last = i })
+    if (last >= 0) setSetting('fog_reveals', fogReveals.filter((_, i) => i !== last))
+  }
+  const clearErase = () => setSetting('fog_reveals', fogReveals.filter((s) => (s.chart || 'sea_of_swords') !== chartKey))
 
   // markers for this chart; players see charted ones, editors see all
   const mine = locations.filter((l) => (l.chart || 'sea_of_swords') === chartKey)
@@ -279,7 +319,7 @@ export default function MapTab() {
             className="map-svg"
             viewBox={`0 0 ${W} ${H}`}
             preserveAspectRatio="xMidYMid meet"
-            style={{ cursor: placing ? 'crosshair' : 'grab', touchAction: 'none' }}
+            style={{ cursor: placing ? 'crosshair' : erasing ? 'cell' : 'grab', touchAction: 'none' }}
             onPointerDown={onBgDown}
             onPointerMove={onBgMove}
             onPointerUp={onBgUp}
@@ -287,6 +327,7 @@ export default function MapTab() {
           >
             <defs>
               <filter id="soft"><feGaussianBlur stdDeviation="26" /></filter>
+              <filter id="feather"><feGaussianBlur stdDeviation="7" /></filter>
               <filter id="fognoise">
                 <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n" />
                 <feColorMatrix in="n" type="matrix"
@@ -299,6 +340,18 @@ export default function MapTab() {
                 <g filter="url(#soft)">
                   {chartedRegions.flatMap((r) => r.shapes.map((s, i) => <ShapeEl key={r.key + i} s={s} fill="#000" />))}
                 </g>
+                {/* free-hand eraser reveals (softly feathered so wiped edges look natural) */}
+                <g filter="url(#feather)">
+                  {[...chartReveals, ...(liveStroke ? [liveStroke] : [])].map((s, i) => (
+                    <g key={'rv' + i}>
+                      <circle cx={s.pts[0][0]} cy={s.pts[0][1]} r={s.r} fill="#000" />
+                      {s.pts.length > 1 && (
+                        <polyline points={s.pts.map((p) => p.join(',')).join(' ')} fill="none"
+                          stroke="#000" strokeWidth={s.r * 2} strokeLinecap="round" strokeLinejoin="round" />
+                      )}
+                    </g>
+                  ))}
+                </g>
               </mask>
             </defs>
 
@@ -308,8 +361,8 @@ export default function MapTab() {
 
               {/* fog of war over everything not yet charted */}
               <g mask="url(#fogmask)" pointerEvents="none" clipPath="url(#mapclip)">
-                <rect x="0" y="0" width={W} height={H} fill="#1f2b31" opacity="0.92" />
-                <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.5" />
+                <rect x="0" y="0" width={W} height={H} fill="#0e1418" opacity="0.985" />
+                <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.6" />
                 <text x={W * 0.70} y={H * 0.86} textAnchor="middle"
                   style={{ font: 'italic 600 34px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.4">
                   Here be uncharted waters
@@ -330,7 +383,7 @@ export default function MapTab() {
                   <g key={l.id}
                     className="map-marker"
                     transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
-                    style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1 }}
+                    style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1, pointerEvents: erasing ? 'none' : undefined }}
                     onPointerDown={(e) => onMarkerDown(e, l)}
                     onPointerMove={onMarkerMove}
                     onPointerUp={(e) => onMarkerUp(e, l)}
@@ -360,13 +413,19 @@ export default function MapTab() {
             <button className="map-btn" title="Zoom out" onClick={() => zoomCenter(1 / 1.35)}>－</button>
             <button className="map-btn" title="Reset view" onClick={() => setView({ s: 1, tx: 0, ty: 0 })}>⤢</button>
             {canEdit && (
-              <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => setPlacing((p) => !p)}>
-                {placing ? '✕ cancel' : '＋ marker'}
-              </button>
+              <>
+                <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => { setErasing(false); setPlacing((p) => !p) }}>
+                  {placing ? '✕ cancel' : '＋ marker'}
+                </button>
+                <button className={`map-btn wide ${erasing ? 'active' : ''}`} onClick={() => { setPlacing(false); setErasing((p) => !p) }}>
+                  {erasing ? '✕ done erasing' : '⌫ fog eraser'}
+                </button>
+              </>
             )}
           </div>
 
           {placing && <div className="map-hint">Tap the chart to drop a marker</div>}
+          {erasing && <div className="map-hint">Drag across the chart to wipe away the fog</div>}
 
           {canEdit && (
             <div className="map-hud map-hud-tr map-regions">
@@ -377,6 +436,21 @@ export default function MapTab() {
                   {r.label}
                 </label>
               ))}
+              {erasing && (
+                <>
+                  <hr className="rule" style={{ margin: '8px 0 6px' }} />
+                  <div className="eyebrow" style={{ marginBottom: 4 }}>Fog eraser</div>
+                  <label className="flex gap-sm" style={{ alignItems: 'center', fontSize: 13 }}>
+                    Brush
+                    <input type="range" min="30" max="240" step="10" value={brush}
+                      onChange={(e) => setBrush(Number(e.target.value))} style={{ flex: 1 }} />
+                  </label>
+                  <div className="flex gap-sm" style={{ marginTop: 6 }}>
+                    <button className="map-btn wide" onClick={undoErase} disabled={!chartReveals.length}>↶ undo</button>
+                    <button className="map-btn wide" onClick={clearErase} disabled={!chartReveals.length}>clear</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
