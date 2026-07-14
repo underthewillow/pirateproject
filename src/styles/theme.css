@@ -312,9 +312,8 @@ body {
     linear-gradient(180deg, rgba(255,250,235,0.7), rgba(228,208,160,0.7));
   border: 1px solid var(--parchment-edge);
   box-shadow: 0 2px 5px var(--shadow);
-  cursor: grab;
+  cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.12s ease;
-  touch-action: none;
 }
 .crew-token:hover { transform: translateY(-1px); box-shadow: 0 5px 12px var(--shadow); }
 .crew-token.dragging { opacity: 0.35; }

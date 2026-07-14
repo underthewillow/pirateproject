@@ -70,9 +70,12 @@
 .hide-mask { margin-right: 3px; font-size: 12px; }
 
 /* ---- Crew board: compact character cards (the Helm's look, a size down) ---- */
-.crew-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+.crew-cards { display: flex; flex-wrap: wrap; gap: 10px; align-items: start; }
+.crew-card-wrap { width: 118px; display: flex; flex-direction: column; gap: 5px; }
+.crew-card-move { width: 100%; font-size: 12px; padding: 3px 6px; }
+.role-appoint { width: 100%; }
 .crew-card {
-  width: 118px; display: flex; flex-direction: column; text-align: left; cursor: grab; overflow: hidden;
+  width: 118px; display: flex; flex-direction: column; text-align: left; cursor: pointer; overflow: hidden;
   border-radius: 9px; background: rgba(255,250,235,0.5);
   border: 1px solid var(--parchment-edge); box-shadow: 0 2px 6px rgba(60,36,12,0.25);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
