@@ -167,7 +167,7 @@ export default function BulletinTab() {
           <p className="muted" style={{ margin: '0 0 10px' }}>Private to you — jottings, reminders, plans. Only you see this in the app.</p>
           <div className="card scratchpad">
             <Editable as="div" className="scratchpad-body" multiline
-              editable
+              editable enterNewline
               placeholder="Your private notes…"
               value={me?.scratch_pad || ''}
               onCommit={saveScratch} />
