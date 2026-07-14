@@ -54,6 +54,10 @@ export default function CharacterModal({ member, onClose }) {
   // stat blocks; a player handed one stays limited to current HP, same as
   // everyone else, with no deeper self-edit tier at all.
   const deepEditable = canEdit || (member.is_pc && isOwnChar && selfEditMode)
+  // Narrative/status fields — title, bio, condition — are low-risk, so anyone
+  // who controls the character (their PC *or* a linked NPC) can edit them
+  // directly, no self-edit toggle needed. Deeper stats stay behind deepEditable.
+  const detailsEditable = canEdit || isOwnChar
 
   const stats = member.stats && typeof member.stats === 'object' ? member.stats : {}
   const memberRoles = Array.isArray(member.roles) ? member.roles : []
@@ -106,7 +110,7 @@ export default function CharacterModal({ member, onClose }) {
             className="eyebrow"
             placeholder="add a title / epithet"
             value={member.title}
-            editable={deepEditable}
+            editable={detailsEditable}
             onCommit={(v) => patchItem('crew', member.id, { title: v })}
           />
         </div>
@@ -153,7 +157,7 @@ export default function CharacterModal({ member, onClose }) {
         <Editable
           value={member.stats?.condition}
           placeholder="hale — note a condition (e.g. incapacitated, poisoned)…"
-          editable={deepEditable}
+          editable={detailsEditable}
           onCommit={(v) => setStats({ ...stats, condition: v })}
         />
       </div>
@@ -243,7 +247,7 @@ export default function CharacterModal({ member, onClose }) {
           multiline
           placeholder="Write what's known of this soul…"
           value={member.bio}
-          editable={deepEditable}
+          editable={detailsEditable}
           onCommit={(v) => patchItem('crew', member.id, { bio: v })}
         />
       </div>
