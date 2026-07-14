@@ -27,7 +27,7 @@ function readAbilities(stats) {
   return out
 }
 
-export default function DiceRoller({ member }) {
+export default function DiceRoller({ member, canRoll = true }) {
   const [modifier, setModifier] = useState(0)
   const [mode, setMode] = useState('normal') // normal | adv | dis (affects d20)
   const [expr, setExpr] = useState('')
@@ -84,58 +84,64 @@ export default function DiceRoller({ member }) {
 
   return (
     <div className="dice">
-      <div className="row-between">
-        <label className="eyebrow">Dice</label>
-        <div className="toolbar" style={{ gap: 6 }}>
-          <span className="muted" style={{ fontSize: 13 }}>d20 mode:</span>
-          {['normal', 'adv', 'dis'].map((m) => (
-            <button
-              key={m}
-              className={`btn small ${mode === m ? 'brass' : 'ghost'}`}
-              onClick={() => setMode(m)}
-            >{m === 'normal' ? 'Normal' : m === 'adv' ? 'Advantage' : 'Disadvantage'}</button>
-          ))}
-        </div>
-      </div>
+      {canRoll ? (
+        <>
+          <div className="row-between">
+            <label className="eyebrow">Dice</label>
+            <div className="toolbar" style={{ gap: 6 }}>
+              <span className="muted" style={{ fontSize: 13 }}>d20 mode:</span>
+              {['normal', 'adv', 'dis'].map((m) => (
+                <button
+                  key={m}
+                  className={`btn small ${mode === m ? 'brass' : 'ghost'}`}
+                  onClick={() => setMode(m)}
+                >{m === 'normal' ? 'Normal' : m === 'adv' ? 'Advantage' : 'Disadvantage'}</button>
+              ))}
+            </div>
+          </div>
 
-      <div className="flex wrap gap-sm" style={{ marginTop: 8, alignItems: 'center' }}>
-        {DICE.map((d) => (
-          <button key={d} className="btn dice-btn" onClick={() => rollQuick(d)}>d{d}</button>
-        ))}
-        <span className="flex gap-sm" style={{ alignItems: 'center', marginLeft: 4 }}>
-          <span className="muted">mod</span>
-          <input
-            className="input"
-            type="number"
-            value={modifier}
-            onChange={(e) => setModifier(e.target.value)}
-            style={{ width: 64 }}
-          />
-        </span>
-      </div>
+          <div className="flex wrap gap-sm" style={{ marginTop: 8, alignItems: 'center' }}>
+            {DICE.map((d) => (
+              <button key={d} className="btn dice-btn" onClick={() => rollQuick(d)}>d{d}</button>
+            ))}
+            <span className="flex gap-sm" style={{ alignItems: 'center', marginLeft: 4 }}>
+              <span className="muted">mod</span>
+              <input
+                className="input"
+                type="number"
+                value={modifier}
+                onChange={(e) => setModifier(e.target.value)}
+                style={{ width: 64 }}
+              />
+            </span>
+          </div>
 
-      {abilities.length > 0 && (
-        <div className="flex wrap gap-sm" style={{ marginTop: 8 }}>
-          {abilities.map((a) => (
-            <button key={a.abbr} className="btn small" onClick={() => rollAbility(a)}>
-              {a.abbr} {fmt(a.mod)}
-            </button>
-          ))}
-        </div>
+          {abilities.length > 0 && (
+            <div className="flex wrap gap-sm" style={{ marginTop: 8 }}>
+              {abilities.map((a) => (
+                <button key={a.abbr} className="btn small" onClick={() => rollAbility(a)}>
+                  {a.abbr} {fmt(a.mod)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="toolbar" style={{ marginTop: 8 }}>
+            <input
+              className="input"
+              placeholder="custom roll, e.g. 2d6+3"
+              value={expr}
+              onChange={(e) => setExpr(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && rollExpr()}
+              style={{ maxWidth: 200 }}
+            />
+            <button className="btn brass" onClick={rollExpr}>Roll</button>
+          </div>
+        </>
+      ) : (
+        <p className="muted" style={{ fontSize: 13 }}>Only this character's player (or the DM) can roll for them.</p>
       )}
-
-      <div className="toolbar" style={{ marginTop: 8 }}>
-        <input
-          className="input"
-          placeholder="custom roll, e.g. 2d6+3"
-          value={expr}
-          onChange={(e) => setExpr(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && rollExpr()}
-          style={{ maxWidth: 200 }}
-        />
-        <button className="btn brass" onClick={rollExpr}>Roll</button>
-        {log.length > 0 && <button className="btn small ghost" onClick={() => setLog([])}>Clear</button>}
-      </div>
+      {log.length > 0 && <button className="btn small ghost" onClick={() => setLog([])}>Clear</button>}
 
       <div className="dice-log">
         {log.map((r) => (

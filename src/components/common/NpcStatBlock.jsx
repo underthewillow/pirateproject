@@ -31,8 +31,11 @@ function UsesTicker({ max, used, onChange }) {
 }
 
 // Editable, rollable stat block for NPC crew (distinct from the D&D-Beyond PC
-// sheet). Everything is editable when the log is unlocked (admin / DM).
-export default function NpcStatBlock({ member }) {
+// sheet). Most of it is editable only when the log is unlocked (admin / DM);
+// `ownCharEditable` (HP + rolling) and `deepEditable` (ability scores/max HP,
+// behind its edit-mode toggle) additionally open those specific pieces to
+// whoever this NPC is linked to (same self-service tier a linked PC gets).
+export default function NpcStatBlock({ member, ownCharEditable = false, deepEditable = false }) {
   const { patchItem, canEdit } = useData()
   const roller = useRoller()
   const [mode, setMode] = useState('normal')
@@ -107,18 +110,22 @@ export default function NpcStatBlock({ member }) {
         </div>
         <div className="sb-stat sb-hp">
           <div className="sb-stat-num">
-            <input className="input sb-hp-input" type="number" value={hpCur} onChange={(e) => setHp(e.target.value)} />
-            <span className="muted" style={{ fontSize: 14 }}> / {canEdit ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} /> : s.maxHp}</span>
+            {ownCharEditable
+              ? <input className="input sb-hp-input" type="number" value={hpCur} onChange={(e) => setHp(e.target.value)} />
+              : hpCur}
+            <span className="muted" style={{ fontSize: 14 }}> / {deepEditable ? <Editable type="number" value={s.maxHp} onCommit={(v) => setSheet({ maxHp: Number(v) })} /> : s.maxHp}</span>
           </div>
           <div className="sb-stat-lbl">Hit Points</div>
-          <div className="sb-hp-btns">
-            <button className="btn small danger" onClick={() => setHp(hpCur - 1)}>−</button>
-            <button className="btn small" onClick={() => setHp(hpCur + 1)}>+</button>
-            <button className="btn small ghost" onClick={() => setHp(s.maxHp)}>full</button>
-          </div>
+          {ownCharEditable && (
+            <div className="sb-hp-btns">
+              <button className="btn small danger" onClick={() => setHp(hpCur - 1)}>−</button>
+              <button className="btn small" onClick={() => setHp(hpCur + 1)}>+</button>
+              <button className="btn small ghost" onClick={() => setHp(s.maxHp)}>full</button>
+            </div>
+          )}
         </div>
-        <button className="sb-stat sb-click" onClick={() => d20('Initiative', mod('DEX'))}>
-          <div className="sb-stat-num">{fmt(mod('DEX'))}</div><div className="sb-stat-lbl">Initiative ⚄</div>
+        <button className="sb-stat sb-click" disabled={!ownCharEditable} onClick={() => d20('Initiative', mod('DEX'))}>
+          <div className="sb-stat-num">{fmt(mod('DEX'))}</div><div className="sb-stat-lbl">Initiative</div>
         </button>
         <div className="sb-stat">
           <div className="sb-stat-num">
@@ -134,11 +141,11 @@ export default function NpcStatBlock({ member }) {
         {ABILS.map((ab) => (
           <div className="sb-abil" key={ab}>
             <div className="sb-abil-abbr">{ab}</div>
-            <button className="sb-abil-mod sb-click" onClick={() => d20(`${ab} check`, mod(ab))} title="Roll ability check">{fmt(mod(ab))}</button>
-            {canEdit
+            <button className="sb-abil-mod sb-click" disabled={!ownCharEditable} onClick={() => d20(`${ab} check`, mod(ab))} title="Roll ability check">{fmt(mod(ab))}</button>
+            {deepEditable
               ? <input className="input ability-input" type="number" value={abilities[ab] ?? 10} onChange={(e) => setSheet({ abilities: { ...abilities, [ab]: Number(e.target.value) } })} />
               : <div className="sb-abil-score">{abilities[ab] ?? 10}</div>}
-            <button className="sb-abil-save sb-click" onClick={() => d20(`${ab} save`, saveMod(ab))} title="Roll saving throw">
+            <button className="sb-abil-save sb-click" disabled={!ownCharEditable} onClick={() => d20(`${ab} save`, saveMod(ab))} title="Roll saving throw">
               save {fmt(saveMod(ab))}{saves.includes(ab) ? ' ●' : ''}
             </button>
             {canEdit && (
@@ -156,7 +163,7 @@ export default function NpcStatBlock({ member }) {
         {skills.length === 0 && <span className="muted">No trained skills.</span>}
         {skills.map((name) => (
           <span key={name} className="npc-skill">
-            <button className="sb-skill sb-click" onClick={() => d20(name, mod(SKILL_ABIL[name]) + pb)}>
+            <button className="sb-skill sb-click" disabled={!ownCharEditable} onClick={() => d20(name, mod(SKILL_ABIL[name]) + pb)}>
               <span className="sb-skill-name">{name}</span>
               <span className="sb-skill-abil muted">{SKILL_ABIL[name]}</span>
               <span className="sb-skill-mod">{fmt(mod(SKILL_ABIL[name]) + pb)}</span>
@@ -186,9 +193,9 @@ export default function NpcStatBlock({ member }) {
               <div className="sb-attack-sub muted">{canEdit ? <Editable value={a.notes} placeholder="range / notes…" onCommit={(v) => patchAttack(i, { notes: v })} /> : a.notes}</div>
             </div>
             {a.toHit !== '' && a.toHit != null && (
-              <button className="btn small sb-atk-btn" onClick={() => d20(`${a.n} — to hit`, Number(a.toHit))} title="Roll to hit">{fmt(Number(a.toHit) || 0)} hit</button>
+              <button className="btn small sb-atk-btn" disabled={!ownCharEditable} onClick={() => d20(`${a.n} — to hit`, Number(a.toHit))} title="Roll to hit">{fmt(Number(a.toHit) || 0)} hit</button>
             )}
-            {a.dmg && <button className="btn small brass sb-atk-btn" onClick={() => rollExpr(`${a.n} — damage`, a.dmg)} title="Roll damage">{a.dmg}</button>}
+            {a.dmg && <button className="btn small brass sb-atk-btn" disabled={!ownCharEditable} onClick={() => rollExpr(`${a.n} — damage`, a.dmg)} title="Roll damage">{a.dmg}</button>}
             {a.uses > 0 && <UsesTicker max={a.uses} used={a.used} onChange={(v) => patchAttack(i, { used: v })} />}
             {canEdit && (
               <div className="npc-atk-edit">
@@ -218,7 +225,7 @@ export default function NpcStatBlock({ member }) {
               <strong style={{ fontFamily: 'var(--font-ui)' }}>{canEdit ? <Editable value={t.n} onCommit={(v) => patchTrait(i, { n: v })} /> : t.n}</strong>
               <span className="flex gap-sm" style={{ alignItems: 'center' }}>
                 {t.uses > 0 && <UsesTicker max={t.uses} used={t.used} onChange={(v) => patchTrait(i, { used: v })} />}
-                {t.roll && <button className="btn small brass" onClick={() => rollExpr(t.n, t.roll)} title="Roll">{t.roll}</button>}
+                {t.roll && <button className="btn small brass" disabled={!ownCharEditable} onClick={() => rollExpr(t.n, t.roll)} title="Roll">{t.roll}</button>}
                 {canEdit && <button className="btn small danger" onClick={() => rmTrait(i)}>✕</button>}
               </span>
             </div>

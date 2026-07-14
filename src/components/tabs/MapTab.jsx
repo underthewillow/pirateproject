@@ -62,11 +62,85 @@ function regionAt(regions, x, y) {
   for (const r of regions || []) if ((r.shapes || []).some((s) => shapeHas(s, x, y))) return r.key
   return ''
 }
-// Render one reveal shape (used inside the fog mask, painted black to cut fog).
-function ShapeEl({ s, fill }) {
-  if (s.t === 'ellipse') return <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} fill={fill} />
-  if (s.t === 'capsule') return <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={fill} strokeWidth={s.r * 2} strokeLinecap="round" />
-  return null
+// String form of a reveal shape (fog cutout), for the offscreen fog rasterization below.
+function shapeMarkup(s) {
+  if (s.t === 'ellipse') return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" fill="#000"/>`
+  if (s.t === 'capsule') return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="#000" stroke-width="${s.r * 2}" stroke-linecap="round"/>`
+  return ''
+}
+// String form of a free-hand eraser stroke (fog cutout), baked into the raster
+// the same way charted regions are — see fog_reveals / the eraser tool below.
+function strokeMarkup(s) {
+  const dab = `<circle cx="${s.pts[0][0]}" cy="${s.pts[0][1]}" r="${s.r}" fill="#000"/>`
+  if (!s.pts || s.pts.length < 2) return dab
+  const pts = s.pts.map((p) => p.join(',')).join(' ')
+  return `${dab}<polyline points="${pts}" fill="none" stroke="#000" stroke-width="${s.r * 2}" stroke-linecap="round" stroke-linejoin="round"/>`
+}
+// The fog-of-war (blur + procedural noise, masked by charted regions) never
+// actually changes during pan/zoom — only its position on screen does. But
+// living inside the transformed group as a *live* SVG filter meant every
+// engine had to keep re-deriving those (fairly heavy) pixels on every single
+// frame of a gesture. Desktop Chromium/Edge cache that well enough not to
+// notice; mobile Safari does not, and that mismatch — identical code, fine on
+// desktop, laggy on iOS — is what pointed at this specifically. Baking it to
+// a plain PNG once (whenever the charted regions actually change) turns the
+// per-frame cost into "transform a static image," which is cheap everywhere.
+function buildFogSvgMarkup(W, H, chartedRegions, chartReveals = []) {
+  const cutouts = chartedRegions.flatMap((r) => (r.shapes || []).map(shapeMarkup)).join('')
+  const reveals = chartReveals.map(strokeMarkup).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <defs>
+      <filter id="soft"><feGaussianBlur stdDeviation="26"/></filter>
+      <filter id="feather"><feGaussianBlur stdDeviation="7"/></filter>
+      <filter id="fognoise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0"/>
+      </filter>
+      <mask id="fogmask">
+        <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>
+        <g filter="url(#soft)">${cutouts}</g>
+        <g filter="url(#feather)">${reveals}</g>
+      </mask>
+    </defs>
+    <g mask="url(#fogmask)">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="#0e1418" opacity="0.985"/>
+      <rect x="0" y="0" width="${W}" height="${H}" filter="url(#fognoise)" opacity="0.6"/>
+      <text x="${W * 0.70}" y="${H * 0.86}" text-anchor="middle" opacity="0.4"
+        style="font: italic 600 34px Cinzel, 'IM Fell English SC', serif; fill:#d8c8a6">Here be uncharted waters</text>
+      <text x="${W * 0.24}" y="${H * 0.7}" text-anchor="middle" opacity="0.32"
+        style="font: italic 600 26px Cinzel, 'IM Fell English SC', serif; fill:#d8c8a6">terra incognita</text>
+    </g>
+  </svg>`
+}
+// Rasterizing through an actual <canvas> (HTML <img> → drawImage → PNG) is a
+// far more battle-tested cross-browser path for "bake filter effects into a
+// bitmap" than referencing an SVG-with-filters directly as an <image> src —
+// the latter turned out to just drop the blur/noise filters and render the
+// cutouts' raw bounding box in both Chromium and Safari. This hook rebuilds
+// the fog PNG only when the actual content changes (not on every pan/zoom
+// frame), and keeps the previous image on screen while the new one decodes
+// so charting a new region doesn't flash back to a fully-fogged map.
+function useFogImage(W, H, chartedRegions, chartReveals = []) {
+  const [dataUrl, setDataUrl] = useState(null)
+  const key = chartedRegions.map((r) => r.key).join(',')
+  const revealKey = JSON.stringify(chartReveals) // small (a few coord pairs); rebake on add/undo/clear
+  useEffect(() => {
+    let cancelled = false
+    const svgMarkup = buildFogSvgMarkup(W, H, chartedRegions, chartReveals)
+    const img = new Image()
+    img.onload = () => {
+      if (cancelled) return
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      canvas.getContext('2d').drawImage(img, 0, 0, W, H)
+      setDataUrl(canvas.toDataURL('image/png'))
+    }
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgMarkup)))}`
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [W, H, key, revealKey])
+  return dataUrl
 }
 
 export default function MapTab() {
@@ -75,6 +149,11 @@ export default function MapTab() {
   const [view, setView] = useState({ s: 1, tx: 0, ty: 0 })
   const [openId, setOpenId] = useState(null)
   const [placing, setPlacing] = useState(false)
+  // DM/admin markers were draggable by default, so an accidental drag while
+  // just trying to tap one (easy to trigger, especially on a touchscreen)
+  // would silently relocate it. Off by default each session — same locked
+  // behavior a player sees — until explicitly switched on to rearrange pins.
+  const [moveMode, setMoveMode] = useState(false)
   const [localPos, setLocalPos] = useState(null) // {id,x,y} while dragging a marker
   const [erasing, setErasing] = useState(false)   // DM fog-eraser mode
   const [brush, setBrush] = useState(90)           // eraser radius in map units
@@ -82,14 +161,49 @@ export default function MapTab() {
   const [localShip, setLocalShip] = useState(null)  // {x,y,heading} while dragging/rotating the ship
 
   const svgRef = useRef(null)
+  const groupRef = useRef(null)
   const viewRef = useRef(view)
-  viewRef.current = view
   const pointers = useRef(new Map())
   const pinchRef = useRef(null)
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
   const strokeRef = useRef(null) // points of the eraser stroke currently being drawn
   const shipDrag = useRef(null)  // {mode:'move'|'rotate', moved} while interacting with the ship
+  const markerRefs = useRef(new Map())
+  const markersRef = useRef([])
+  const localPosRef = useRef(null)
+  const wheelCommitTimer = useRef(null)
+  const extraFactorRef = useRef(1)
+  // Markers are sized in fixed SVG viewBox units, counter-scaled by `inv` so
+  // they stay a constant size independent of *zoom* — but the SVG itself also
+  // scales to fit whatever width its container renders at, which is nowhere
+  // near the same on a full desktop window vs. a narrow phone screen. Without
+  // correcting for that too, the exact same marker ends up ~3x smaller on
+  // mobile than desktop. Track the SVG's actual rendered width so marker size
+  // can be normalized against it, landing on a consistent real on-screen size
+  // everywhere.
+  const [svgWidthPx, setSvgWidthPx] = useState(null)
+  const pendingSvgWidthRef = useRef(null)
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width
+      // Applying this mid-gesture would re-render (and briefly re-mount) the
+      // markers React is otherwise deliberately not touching during a pan or
+      // pinch (see panImperative/zoomImperative) — defer it to onBgUp instead.
+      if (pointers.current.size === 0) setSvgWidthPx(w)
+      else pendingSvgWidthRef.current = w
+    })
+    ro.observe(svg)
+    return () => ro.disconnect()
+  }, [])
+  // Keep viewRef in sync with React state on ordinary renders — but not while
+  // a pan/pinch gesture is in flight (see panImperative/zoomImperative below),
+  // or an unrelated re-render (e.g. a Realtime update from something else in
+  // the app) would stomp the in-progress imperative view and snap the map
+  // back mid-gesture.
+  if (pointers.current.size === 0) viewRef.current = view
 
   const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
   const W = chart.w || 1448
@@ -130,6 +244,8 @@ export default function MapTab() {
     return { x: (vb.x - v.tx) / v.s, y: (vb.y - v.ty) / v.s }
   }, [svgPoint])
 
+  // Discrete, single-shot zoom (HUD +/- buttons, reset view) — a plain React
+  // state update is fine here since it's one click, not a continuous gesture.
   const zoomAround = useCallback((cx, cy, f) => {
     const vb = svgPoint(cx, cy)
     setView((v) => {
@@ -138,16 +254,52 @@ export default function MapTab() {
       return clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
     })
   }, [svgPoint, clampView])
-  const pan = useCallback((dx, dy) => setView((v) => clampView({ ...v, tx: v.tx + dx, ty: v.ty + dy })), [clampView])
+  // Panning and continuous zoom (wheel/pinch) write straight to the DOM
+  // instead of React state — both can fire dozens of times a second, and
+  // running the whole map (fog mask, every marker) through React's
+  // render/reconcile cycle on each one is what made panning and zooming feel
+  // slow. Markers are nested inside the same transformed group, so a pure
+  // pan moves them for free; a zoom also needs each marker's own counter-
+  // scale updated (so glyphs stay a constant on-screen size), so those get
+  // their transform attribute rewritten directly too. React state is
+  // resynced once the gesture actually ends (onBgUp for pinch, a short
+  // debounce for wheel, which has no discrete "end" event).
+  const panImperative = useCallback((dx, dy) => {
+    const next = clampView({ ...viewRef.current, tx: viewRef.current.tx + dx, ty: viewRef.current.ty + dy })
+    viewRef.current = next
+    groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
+  }, [clampView])
+  const zoomImperative = useCallback((cx, cy, f) => {
+    const vb = svgPoint(cx, cy)
+    const v = viewRef.current
+    const ns = clamp(v.s * f, 1, 6)
+    const wx = (vb.x - v.tx) / v.s, wy = (vb.y - v.ty) / v.s
+    const next = clampView({ s: ns, tx: vb.x - wx * ns, ty: vb.y - wy * ns })
+    viewRef.current = next
+    groupRef.current?.setAttribute('transform', `translate(${next.tx},${next.ty}) scale(${next.s})`)
+    const inv = extraFactorRef.current / next.s
+    for (const l of markersRef.current) {
+      const node = markerRefs.current.get(l.id)
+      if (!node) continue
+      const lp = localPosRef.current
+      const p = lp && lp.id === l.id ? lp : l
+      node.setAttribute('transform', `translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`)
+    }
+  }, [svgPoint, clampView])
 
   // wheel zoom (manual listener so we can preventDefault)
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    const onWheel = (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18) }
+    const onWheel = (e) => {
+      e.preventDefault()
+      zoomImperative(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18)
+      clearTimeout(wheelCommitTimer.current)
+      wheelCommitTimer.current = setTimeout(() => setView(viewRef.current), 150)
+    }
     svg.addEventListener('wheel', onWheel, { passive: false })
-    return () => svg.removeEventListener('wheel', onWheel)
-  }, [zoomAround, chartKey])
+    return () => { svg.removeEventListener('wheel', onWheel); clearTimeout(wheelCommitTimer.current) }
+  }, [zoomImperative, chartKey])
 
   // ---- background pan / pinch ----
   const onBgDown = (e) => {
@@ -183,12 +335,12 @@ export default function MapTab() {
       const [a, b] = pts
       const dist = Math.hypot(a.x - b.x, a.y - b.y)
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-      if (pinchRef.current) zoomAround(mid.x, mid.y, dist / pinchRef.current)
+      if (pinchRef.current) zoomImperative(mid.x, mid.y, dist / pinchRef.current)
       pinchRef.current = dist
       tapRef.current = null
     } else {
       const A = svgPoint(prev.x, prev.y), B = svgPoint(e.clientX, e.clientY)
-      pan(B.x - A.x, B.y - A.y)
+      panImperative(B.x - A.x, B.y - A.y)
     }
   }
   const onBgUp = (e) => {
@@ -208,6 +360,14 @@ export default function MapTab() {
     tapRef.current = null
     const tapped = start && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 6
     if (tapped && placing && canEdit) addMarkerAt(e.clientX, e.clientY)
+    // Commit the final imperative pan position into React state now that the
+    // gesture has ended (harmless no-op if this was a pinch-zoom instead,
+    // which already keeps state in sync via zoomAround's setView calls).
+    setView(viewRef.current)
+    if (pendingSvgWidthRef.current != null) {
+      setSvgWidthPx(pendingSvgWidthRef.current)
+      pendingSvgWidthRef.current = null
+    }
   }
 
   // No window.prompt (the desktop app blocks it) — create the marker, then open
@@ -234,7 +394,7 @@ export default function MapTab() {
     if (!d) return
     e.stopPropagation()
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 8) d.moved = true
-    if (d.moved && canEdit) {
+    if (d.moved && canEdit && moveMode) {
       const w = worldFromClient(e.clientX, e.clientY)
       setLocalPos({ id: d.id, x: clamp(w.x, 0, W), y: clamp(w.y, 0, H) })
     }
@@ -246,7 +406,7 @@ export default function MapTab() {
     markerDrag.current = null
     setLocalPos(null)
     if (!d) return
-    if (d.moved && canEdit) {
+    if (d.moved && canEdit && moveMode) {
       const w = worldFromClient(e.clientX, e.clientY)
       patchItem('locations', loc.id, { x: Math.round(clamp(w.x, 0, W)), y: Math.round(clamp(w.y, 0, H)), region: regionAt(regions, w.x, w.y) })
     } else if (loc.discovered || canEdit) {
@@ -309,7 +469,27 @@ export default function MapTab() {
   const visible = mine.filter((l) => canEdit || isCharted(l.region))
   const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
-  const inv = 1 / view.s
+  // Only rebuilds when the actual fog content changes (charting a new region,
+  // an eraser stroke, switching charts) — not on every pan/zoom frame. See useFogImage.
+  const fogDataUrl = useFogImage(W, H, chartedRegions, chartReveals)
+  // Cached for zoomImperative, which runs outside React's render cycle and
+  // needs the current marker list/drag position without stale closures.
+  markersRef.current = visible
+  localPosRef.current = localPos
+  // Normalizes marker size against the SVG's actual rendered width (see the
+  // ResizeObserver above) so a marker is the same real on-screen size on a
+  // phone as on a desktop window, then targets a modestly bigger, brighter
+  // size than the map previously rendered at on desktop.
+  const pxPerUnit = (svgWidthPx || W * 0.8) / W
+  const MARKER_TARGET_DIAMETER_PX = 28
+  const BASE_RING_R = 14
+  const extraFactor = MARKER_TARGET_DIAMETER_PX / (2 * BASE_RING_R * pxPerUnit)
+  extraFactorRef.current = extraFactor
+  // Read from viewRef rather than view state directly — viewRef is always
+  // current (kept live during pan/zoom gestures, synced from state otherwise),
+  // so an unrelated re-render mid-gesture re-renders this with the correct
+  // in-progress position instead of snapping back to stale committed state.
+  const inv = extraFactor / viewRef.current.s
   const shipEditable = isDM && !erasing && !placing // ship is a DM-only tool, draggable in plain edit mode
 
   return (
@@ -366,52 +546,47 @@ export default function MapTab() {
             onPointerCancel={onBgUp}
           >
             <defs>
-              <filter id="soft"><feGaussianBlur stdDeviation="26" /></filter>
-              <filter id="feather"><feGaussianBlur stdDeviation="7" /></filter>
-              <filter id="fognoise">
-                <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="7" result="n" />
-                <feColorMatrix in="n" type="matrix"
-                  values="0 0 0 0 0.13  0 0 0 0 0.18  0 0 0 0 0.2  0 0 0 0.6 0" />
-              </filter>
               <clipPath id="mapclip"><rect x="0" y="0" width={W} height={H} /></clipPath>
-              {/* fog mask: white = fogged, black cut-outs = charted/revealed */}
-              <mask id="fogmask">
-                <rect x="0" y="0" width={W} height={H} fill="#fff" />
-                <g filter="url(#soft)">
-                  {chartedRegions.flatMap((r) => r.shapes.map((s, i) => <ShapeEl key={r.key + i} s={s} fill="#000" />))}
-                </g>
-                {/* free-hand eraser reveals (softly feathered so wiped edges look natural) */}
-                <g filter="url(#feather)">
-                  {[...chartReveals, ...(liveStroke ? [liveStroke] : [])].map((s, i) => (
-                    <g key={'rv' + i}>
-                      <circle cx={s.pts[0][0]} cy={s.pts[0][1]} r={s.r} fill="#000" />
-                      {s.pts.length > 1 && (
-                        <polyline points={s.pts.map((p) => p.join(',')).join(' ')} fill="none"
-                          stroke="#000" strokeWidth={s.r * 2} strokeLinecap="round" strokeLinejoin="round" />
-                      )}
-                    </g>
-                  ))}
-                </g>
-              </mask>
+              {/* While an eraser stroke is in progress we can't re-bake the fog
+                  PNG every frame, so reveal the in-progress stroke live by
+                  masking a copy of the chart to it (see the overlay below). On
+                  release the stroke is baked into the fog raster and this clears. */}
+              {liveStroke && (
+                <mask id="livereveal">
+                  <rect x="0" y="0" width={W} height={H} fill="#000" />
+                  <circle cx={liveStroke.pts[0][0]} cy={liveStroke.pts[0][1]} r={liveStroke.r} fill="#fff" />
+                  {liveStroke.pts.length > 1 && (
+                    <polyline points={liveStroke.pts.map((p) => p.join(',')).join(' ')} fill="none"
+                      stroke="#fff" strokeWidth={liveStroke.r * 2} strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                </mask>
+              )}
             </defs>
 
-            <g transform={`translate(${view.tx},${view.ty}) scale(${view.s})`} clipPath="url(#mapclip)">
+            {/* will-change hints the browser to composite this subtree (chart
+                image + the blurred/noisy fog-of-war filter effects) as its own
+                cached layer rather than re-rendering the filters from scratch
+                on every pan/zoom frame — mobile Safari in particular is known
+                to be much weaker than desktop at caching filtered SVG content
+                across transform changes without this hint. */}
+            <g ref={groupRef} style={{ willChange: 'transform' }} transform={`translate(${viewRef.current.tx},${viewRef.current.ty}) scale(${viewRef.current.s})`} clipPath="url(#mapclip)">
               {/* painted chart */}
               <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H} preserveAspectRatio="none" />
 
-              {/* fog of war over everything not yet charted */}
-              <g mask="url(#fogmask)" pointerEvents="none" clipPath="url(#mapclip)">
-                <rect x="0" y="0" width={W} height={H} fill="#0e1418" opacity="0.985" />
-                <rect x="0" y="0" width={W} height={H} filter="url(#fognoise)" opacity="0.6" />
-                <text x={W * 0.70} y={H * 0.86} textAnchor="middle"
-                  style={{ font: 'italic 600 34px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.4">
-                  Here be uncharted waters
-                </text>
-                <text x={W * 0.24} y={H * 0.7} textAnchor="middle"
-                  style={{ font: 'italic 600 26px var(--font-display, serif)', fill: '#d8c8a6' }} opacity="0.32">
-                  terra incognita
-                </text>
-              </g>
+              {/* fog of war over everything not yet charted — pre-rendered
+                  (see useFogImage) instead of a live filter, so panning/
+                  zooming only ever transforms a plain bitmap. Fully-fogged
+                  placeholder rect covers the brief gap before the first
+                  raster finishes decoding, rather than flashing the bare map. */}
+              {fogDataUrl
+                ? <image href={fogDataUrl} x="0" y="0" width={W} height={H} pointerEvents="none" clipPath="url(#mapclip)" />
+                : <rect x="0" y="0" width={W} height={H} fill="#0e1418" opacity="0.985" pointerEvents="none" />}
+              {/* live eraser feedback: a copy of the chart shown only through the
+                  in-progress stroke, so fog appears to wipe away as you drag. */}
+              {liveStroke && (
+                <image href={assetUrl(chart.img)} xlinkHref={assetUrl(chart.img)} x="0" y="0" width={W} height={H}
+                  preserveAspectRatio="none" mask="url(#livereveal)" pointerEvents="none" clipPath="url(#mapclip)" />
+              )}
 
               {/* markers */}
               {visible.map((l) => {
@@ -421,9 +596,10 @@ export default function MapTab() {
                 const faded = canEdit && !isCharted(l.region) // editor-only preview of un-revealed pins
                 return (
                   <g key={l.id}
+                    ref={(node) => { if (node) markerRefs.current.set(l.id, node); else markerRefs.current.delete(l.id) }}
                     className="map-marker"
                     transform={`translate(${Number(p.x)},${Number(p.y)}) scale(${inv})`}
-                    style={{ cursor: canEdit ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1, pointerEvents: erasing ? 'none' : undefined }}
+                    style={{ cursor: canEdit && moveMode ? 'grab' : 'pointer', opacity: faded ? 0.5 : 1, pointerEvents: erasing ? 'none' : undefined }}
                     onPointerDown={(e) => onMarkerDown(e, l)}
                     onPointerMove={onMarkerMove}
                     onPointerUp={(e) => onMarkerUp(e, l)}
@@ -431,7 +607,7 @@ export default function MapTab() {
                   >
                     <circle r="32" fill="#000" opacity="0" pointerEvents="all" />
                     <circle className="mm-pulse" r="16" fill="none" stroke={known ? t.c : '#6b573a'} strokeWidth="2" />
-                    <circle className="mm-ring" r="14" fill={known ? t.c : '#6b573a'} fillOpacity="0.25"
+                    <circle className="mm-ring" r="14" fill={known ? t.c : '#6b573a'} fillOpacity="0.32"
                       stroke={known ? t.c : '#6b573a'} strokeWidth="3" />
                     <text className="mm-glyph" x="0" y="6" textAnchor="middle"
                       style={{ font: '17px serif', fill: known ? t.c : '#6b573a' }}>{known ? t.g : '?'}</text>
@@ -501,6 +677,15 @@ export default function MapTab() {
             {canEdit && (
               <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => { setErasing(false); setPlacing((p) => !p) }}>
                 {placing ? '✕ cancel' : '＋ marker'}
+              </button>
+            )}
+            {canEdit && (
+              <button
+                className={`map-btn wide ${moveMode ? 'active' : ''}`}
+                title="When off, tapping a marker just opens it — same as a player sees — so an accidental drag can't relocate it"
+                onClick={() => setMoveMode((m) => !m)}
+              >
+                {moveMode ? '🔓 move pins' : '🔒 pins locked'}
               </button>
             )}
             {isDM && (

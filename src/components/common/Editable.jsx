@@ -12,8 +12,11 @@ export default function Editable({
   className = '',
   as: Tag = 'span',
   type = 'text',
+  editable, // optional override — defaults to the app-wide canEdit flag, but
+  // callers can extend editing to e.g. a crew member's own linked character.
 }) {
-  const { canEdit } = useData()
+  const { canEdit: appCanEdit } = useData()
+  const canEdit = editable ?? appCanEdit
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? '')
   const ref = useRef(null)
