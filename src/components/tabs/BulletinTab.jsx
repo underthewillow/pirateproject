@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAppAuth } from '../../context/AuthContext'
 import { assetUrl } from '../../lib/asset'
-import { uploadImage } from '../../lib/upload'
 import Editable from '../common/Editable'
+import ImageInput from '../common/ImageInput'
 import Lightbox from '../common/Lightbox'
 
 // Scuttlebutt (issues #31 / #22 / #21): the crew's shared board plus a private
@@ -26,8 +26,6 @@ export default function BulletinTab() {
   const { bulletinNotes, appUsers, crew, addItem, patchItem, removeItem, canEdit, isDM } = useData()
   const { identity, hasRole } = useAppAuth()
   const [lightbox, setLightbox] = useState(null)
-  const [uploadingId, setUploadingId] = useState(null)
-  const [uploadErr, setUploadErr] = useState('')
 
   // Any crew member can post/edit their own; the DM can manage anyone's.
   const canContribute = canEdit || hasRole('crew_member')
@@ -53,21 +51,6 @@ export default function BulletinTab() {
 
   const saveScratch = (v) => { if (identity?.id) patchItem('appUsers', identity.id, { scratch_pad: v }) }
 
-  const onPickImage = async (n, file) => {
-    if (!file) return
-    setUploadErr('')
-    setUploadingId(n.id)
-    try {
-      const url = await uploadImage(file)
-      await patchItem('bulletinNotes', n.id, { image_url: url })
-    } catch (e) {
-      console.error('image upload failed', e)
-      setUploadErr('Image upload failed — the storage bucket may not be set up yet (migration 0005).')
-    } finally {
-      setUploadingId(null)
-    }
-  }
-
   return (
     <div>
       {/* ---- Shared board ---- */}
@@ -78,8 +61,6 @@ export default function BulletinTab() {
         </div>
         {canContribute && <button className="btn small brass" onClick={addNote}>+ Post</button>}
       </div>
-
-      {uploadErr && <p className="muted" style={{ color: 'var(--wax-red)', margin: '4px 0 0' }}>{uploadErr}</p>}
 
       <div className="corkboard">
         <div className="panel-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 22 }}>
@@ -107,16 +88,8 @@ export default function BulletinTab() {
                   onCommit={(v) => patchItem('bulletinNotes', n.id, { body: v })} />
                 {canManage(n) && (
                   <div className="note-controls">
-                    <div className="note-imgbtns">
-                      <label className={`btn small ghost note-upload ${uploadingId === n.id ? 'disabled' : ''}`}>
-                        {uploadingId === n.id ? 'Uploading…' : (n.image_url ? '📷 Replace image' : '📷 Add image')}
-                        <input type="file" accept="image/*" hidden disabled={uploadingId === n.id}
-                          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onPickImage(n, f) }} />
-                      </label>
-                      {n.image_url && (
-                        <button className="btn small ghost" onClick={() => patchItem('bulletinNotes', n.id, { image_url: null })}>Remove image</button>
-                      )}
-                    </div>
+                    <ImageInput value={n.image_url} folder="scuttlebutt" showPreview={false}
+                      onCommit={(v) => patchItem('bulletinNotes', n.id, { image_url: v })} />
                     {isDM && (
                       <select className="select note-target" value={n.target_crew_id || ''}
                         onChange={(e) => patchItem('bulletinNotes', n.id, { target_crew_id: e.target.value || null })}>

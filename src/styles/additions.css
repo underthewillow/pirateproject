@@ -249,10 +249,18 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 }
 /* author-only edit controls (image upload, visibility) */
 .note-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.note-imgbtns { display: flex; gap: 6px; flex-wrap: wrap; }
-.note-upload { display: inline-flex; align-items: center; cursor: pointer; }
-.note-upload.disabled { opacity: 0.6; pointer-events: none; }
 .note-target { font-size: 12px; padding: 3px 6px; }
+
+/* Shared image chooser (ImageInput) — upload / paste URL / clear */
+.imageinput { display: flex; flex-direction: column; gap: 6px; }
+.imageinput-preview {
+  display: block; max-width: 100%; max-height: 160px; object-fit: cover;
+  border-radius: var(--radius); border: 1px solid var(--parchment-edge);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.imageinput-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.imageinput-upload { display: inline-flex; align-items: center; cursor: pointer; }
+.imageinput-upload.disabled { opacity: 0.6; pointer-events: none; }
 
 .scratchpad { margin-top: 10px; }
 .scratchpad-body { white-space: pre-wrap; line-height: 1.6; min-height: 90px; display: block; }

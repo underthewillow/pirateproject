@@ -4,6 +4,7 @@ import { useRoller } from '../../context/RollContext'
 import { assetUrl } from '../../lib/asset'
 import { rollD20, parseExpr, fmt } from '../../lib/dice'
 import Editable from '../common/Editable'
+import ImageInput from '../common/ImageInput'
 
 const ABILS = ['STR', 'DEX', 'CON', 'CHA']
 
@@ -34,47 +35,6 @@ const DEFAULT_UPGRADES = [
 // surrounding layout is constrained. An <input> doesn't have that problem —
 // its box respects its CSS width regardless of the value's length — so we
 // show a short fixed label instead of the raw URL when not editing.
-function ImageUrlField({ value, onCommit }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value || '')
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        className="btn small ghost"
-        style={{ marginTop: 8 }}
-        onClick={() => { setDraft(value || ''); setEditing(true) }}
-      >
-        🔗 {value ? 'Change image URL' : 'Set image URL'}
-      </button>
-    )
-  }
-
-  const commit = () => {
-    setEditing(false)
-    if (draft !== value) onCommit(draft)
-  }
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <label className="eyebrow">Ship image URL</label>
-      <input
-        className="input"
-        autoFocus
-        value={draft}
-        placeholder="paste an image link"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
-          if (e.key === 'Escape') { setDraft(value || ''); setEditing(false) }
-        }}
-      />
-    </div>
-  )
-}
-
 const statLabel = (v) => STAT_OPTS.find((o) => o.v === v)?.label || v
 const effectLabel = (u) => `${Number(u.amount) >= 0 ? '+' : ''}${u.amount} ${statLabel(u.stat)}`
 // Return the ship_data patch for applying `amount` of `stat` (negate to reverse).
@@ -166,7 +126,10 @@ export default function ShipTab() {
           {!ship.image_url && <span className="muted center">⛵<br />Add a portrait of the ship</span>}
         </div>
         {canEdit && (
-          <ImageUrlField value={ship.image_url} onCommit={(v) => patchSingleton('ship', { image_url: v })} />
+          <div style={{ marginTop: 8 }}>
+            <ImageInput value={ship.image_url} folder="ship" showPreview={false}
+              onCommit={(v) => patchSingleton('ship', { image_url: v })} />
+          </div>
         )}
         <h2 className="section-title" style={{ marginTop: 14 }}>
           <Editable value={ship.name} onCommit={(v) => patchSingleton('ship', { name: v })} />

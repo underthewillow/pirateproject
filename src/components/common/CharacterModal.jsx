@@ -4,6 +4,7 @@ import { useAppAuth } from '../../context/AuthContext'
 import { assetUrl } from '../../lib/asset'
 import Avatar from './Avatar'
 import Editable from './Editable'
+import ImageInput from './ImageInput'
 import Modal from './Modal'
 import Lightbox from './Lightbox'
 import DiceRoller, { abilityMod } from './DiceRoller'
@@ -349,22 +350,18 @@ export default function CharacterModal({ member, onClose }) {
         <>
           <hr className="rule" />
           <div className="panel-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            <div>
-              <label className="eyebrow">Icon image URL</label>
-              <Editable
-                value={member.image_url}
-                placeholder="crew/icons/name.jpg or a link"
-                onCommit={(v) => patchItem('crew', member.id, { image_url: v })}
-              />
-            </div>
-            <div>
-              <label className="eyebrow">Portrait image URL</label>
-              <Editable
-                value={member.portrait_url}
-                placeholder="crew/portraits/name.jpg or a link"
-                onCommit={(v) => patchItem('crew', member.id, { portrait_url: v })}
-              />
-            </div>
+            <ImageInput
+              label="Icon image"
+              value={member.image_url}
+              folder="crew"
+              onCommit={(v) => patchItem('crew', member.id, { image_url: v })}
+            />
+            <ImageInput
+              label="Portrait image"
+              value={member.portrait_url}
+              folder="crew"
+              onCommit={(v) => patchItem('crew', member.id, { portrait_url: v })}
+            />
           </div>
           <div className="toolbar" style={{ marginTop: 12 }}>
             <label className="flex gap-sm" style={{ alignItems: 'center' }}>
