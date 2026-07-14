@@ -29,12 +29,15 @@ begin
   end if;
 end $$;
 
--- Per-user private fields on app_users (already syncs in realtime):
---   scratch_pad — the user's own private notes, editable only by them.
---   dm_note     — private dispatch written by the DM TO this user (secret
---                 messages, "you receive an item", etc.); the user sees it
---                 read-only. Covers issue #22 without a real private inventory.
+-- Private per-user scratch pad on app_users (already syncs in realtime):
+-- the user's own private notes, editable only by them.
 alter table app_users add column if not exists scratch_pad text;
-alter table app_users add column if not exists dm_note     text;
+
+-- Sealed orders live on the CHARACTER, not the user. The DM writes a private
+-- note to a crew_member; whoever is logged in and linked to that character
+-- (app_users.linked_crew_ids) reads it. This is the private DM->player channel
+-- that covers issue #22 (no real private inventory needed — items live on
+-- D&D Beyond; the DM just needs to hand things out unseen).
+alter table crew_members add column if not exists dm_note text;
 
 notify pgrst, 'reload schema';

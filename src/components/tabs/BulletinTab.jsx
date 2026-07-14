@@ -5,11 +5,11 @@ import Editable from '../common/Editable'
 // The ship's cork board (issues #31 / #22):
 //   1. a shared board of notes/announcements anyone in the crew can pin;
 //   2. a private scratch pad, visible only to the logged-in user; and
-//   3. "sealed orders" — the DM writes a private dispatch to each hand (secret
-//      messages, or items they receive unseen by the rest of the crew), which
-//      that player reads read-only. This replaces the need for a private
-//      inventory tab (#22): personal items live on D&D Beyond; the DM just
-//      needs a private channel to hand things out.
+//   3. "sealed orders" — the DM writes a private note to a CHARACTER
+//      (crew_members.dm_note); whoever is logged in and linked to that
+//      character (app_users.linked_crew_ids) reads it. This is the private
+//      DM->player channel that covers #22: personal items live on D&D Beyond,
+//      so the DM just needs a way to hand things out / whisper to one player.
 function formatDate(ts) {
   if (!ts) return ''
   const d = new Date(ts)
@@ -18,7 +18,7 @@ function formatDate(ts) {
 }
 
 export default function BulletinTab() {
-  const { bulletinNotes, appUsers, addItem, patchItem, removeItem, canEdit, isDM } = useData()
+  const { bulletinNotes, appUsers, crew, addItem, patchItem, removeItem, canEdit, isDM } = useData()
   const { identity, hasRole } = useAppAuth()
   // Same contribution rule as the journal: any crew member can pin/edit their
   // own notes; the DM/admin can manage anyone's.
@@ -36,11 +36,19 @@ export default function BulletinTab() {
 
   const saveScratch = (v) => { if (identity?.id) patchItem('appUsers', identity.id, { scratch_pad: v }) }
 
-  // DM writes a private dispatch to each other user (secret message / item grant).
-  const dispatchUsers = isDM
-    ? [...appUsers]
-        .filter((u) => u.id !== identity?.id)
-        .sort((a, b) => (a.display_name || a.id).localeCompare(b.display_name || b.id))
+  // Sealed orders attach to a character. Reverse-map character id -> the
+  // player(s) linked to it, so the DM can see who will read each dispatch.
+  const playersByChar = {}
+  for (const u of appUsers) for (const cid of u.linked_crew_ids || []) (playersByChar[cid] ||= []).push(u.display_name || u.id)
+
+  // The character(s) the logged-in user plays — they read those characters'
+  // sealed orders (read-only).
+  const myChars = crew.filter((c) => identity?.linkedCrewIds?.includes(c.id))
+  const myOrders = myChars.filter((c) => c.dm_note && c.dm_note.trim())
+
+  // DM writes to any character that's linked to a player.
+  const dispatchChars = isDM
+    ? crew.filter((c) => (playersByChar[c.id] || []).length > 0).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     : []
 
   return (
@@ -78,15 +86,18 @@ export default function BulletinTab() {
         </div>
       </div>
 
-      {/* ---- Sealed orders from the DM (player sees their own, read-only) ---- */}
-      {identity && !isDM && me?.dm_note && (
+      {/* ---- Sealed orders from the DM (read-only, for the character you play) ---- */}
+      {identity && myOrders.length > 0 && (
         <>
           <h3 className="section-title small" style={{ marginTop: 30 }}>Sealed Orders</h3>
           <hr className="rule" />
           <p className="muted" style={{ margin: '0 0 10px' }}>A private word from the DM — for your eyes only.</p>
-          <div className="card sealed">
-            <div className="sealed-body">{me.dm_note}</div>
-          </div>
+          {myOrders.map((c) => (
+            <div className="card sealed" key={c.id} style={{ marginBottom: 10 }}>
+              {myChars.length > 1 && <div className="eyebrow" style={{ marginBottom: 4 }}>{c.name}</div>}
+              <div className="sealed-body">{c.dm_note}</div>
+            </div>
+          ))}
         </>
       )}
 
@@ -106,32 +117,33 @@ export default function BulletinTab() {
         </>
       )}
 
-      {/* ---- DM: private dispatches to each hand (secret notes / item grants) ---- */}
+      {/* ---- DM: private dispatch to each character (secret notes / item grants) ---- */}
       {isDM && (
         <>
           <h3 className="section-title small" style={{ marginTop: 30 }}>Sealed Orders — Private Dispatches</h3>
           <hr className="rule" />
           <p className="muted" style={{ margin: '0 0 10px' }}>
-            Write privately to a single hand — a secret message, or an item they receive out of sight of the rest of the crew.
-            Only that person (and you) can see it.
+            Write privately to a character — a secret message, or an item they receive out of sight of the rest of the crew.
+            Only whoever's logged in as that character can see it.
           </p>
-          {dispatchUsers.length === 0 ? (
-            <p className="muted">No other crew have logged in yet.</p>
+          {dispatchChars.length === 0 ? (
+            <p className="muted">
+              No characters are linked to a player yet. Assign characters to users in Settings › User Management,
+              then you can send them sealed orders here.
+            </p>
           ) : (
             <div className="dispatch-list">
-              {dispatchUsers.map((u) => (
-                <div className="card dispatch" key={u.id}>
+              {dispatchChars.map((c) => (
+                <div className="card dispatch" key={c.id}>
                   <div className="dispatch-head">
-                    <span className="dispatch-name">{u.display_name || u.id}</span>
-                    {Array.isArray(u.roles) && u.roles.length > 0 && (
-                      <span className="dispatch-roles">{u.roles.join(', ')}</span>
-                    )}
+                    <span className="dispatch-name">{c.name}</span>
+                    <span className="dispatch-roles">played by {playersByChar[c.id].join(', ')}</span>
                   </div>
                   <Editable as="div" className="sealed-body" multiline
                     editable
                     placeholder="Send a private note or item…"
-                    value={u.dm_note || ''}
-                    onCommit={(v) => patchItem('appUsers', u.id, { dm_note: v })} />
+                    value={c.dm_note || ''}
+                    onCommit={(v) => patchItem('crew', c.id, { dm_note: v })} />
                 </div>
               ))}
             </div>
