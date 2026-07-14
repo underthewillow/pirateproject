@@ -213,7 +213,7 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .rolllog-row.fumble { border-left-color: var(--wax-red); background: rgba(116,36,32,0.14); }
 .rolllog-row.fumble .rolllog-total { color: var(--wax-red); }
 
-/* ---- Cork Board tab (issue #31) ---- */
+/* ---- Scuttlebutt board (issues #31 / #22 / #21) ---- */
 .corkboard {
   margin-top: 16px;
   padding: 22px 18px;
@@ -229,25 +229,29 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   box-shadow: inset 0 0 40px rgba(0,0,0,0.35);
 }
 .note { padding: 16px 16px 12px; display: flex; flex-direction: column; }
-.note-body { white-space: pre-wrap; line-height: 1.55; min-height: 40px; flex: 1; }
+.note-body { white-space: pre-wrap; line-height: 1.55; min-height: 32px; flex: 1; }
+.note-img {
+  display: block; width: 100%; max-height: 240px; object-fit: cover;
+  border-radius: 3px; margin-bottom: 10px; cursor: zoom-in;
+  border: 1px solid var(--parchment-edge); box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
 .note-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--ink-faded);
 }
 .note-author { font-family: var(--font-sc, var(--font-ui)); font-size: 12px; color: var(--ink-soft); font-style: italic; }
 
+/* private (targeted) posts */
+.note-private { border-left: 4px solid var(--wax-red); }
+.note-private-badge {
+  font-family: var(--font-sc, var(--font-ui)); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; color: var(--wax-red); margin-bottom: 8px;
+}
+/* author-only edit controls (image URL, visibility) */
+.note-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.note-imgurl { font-size: 12px; color: var(--ink-faded); word-break: break-all; }
+.note-target { font-size: 12px; padding: 3px 6px; }
+
 .scratchpad { margin-top: 10px; }
 .scratchpad-body { white-space: pre-wrap; line-height: 1.6; min-height: 90px; display: block; }
 .scratchpad-body .textarea, .scratchpad .textarea { min-height: 120px; }
-
-/* Sealed orders (DM ⇄ player private messages, issues #31 / #22) */
-.sealed {
-  border-left: 5px solid var(--wax-red);
-  background: rgba(116,36,32,0.07);
-}
-.sealed-body { white-space: pre-wrap; line-height: 1.6; min-height: 40px; display: block; }
-.dispatch-list { display: flex; flex-direction: column; gap: 12px; }
-.dispatch { border-left: 5px solid var(--brass); }
-.dispatch-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-.dispatch-name { font-family: var(--font-display); font-size: 17px; color: var(--ink); }
-.dispatch-roles { font-size: 12px; color: var(--ink-faded); font-style: italic; }
