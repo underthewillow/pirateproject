@@ -27,6 +27,7 @@ const COLLECTIONS = {
   marketGoods: 'market_goods',
   appUsers: 'app_users',
   rolls: 'roll_log',
+  bulletinNotes: 'bulletin_notes',
 }
 const SINGLETONS = { ship: 'ship', funds: 'funds' }
 const ALL_TABLES = [
@@ -56,6 +57,7 @@ export function DataProvider({ children }) {
     marketGoods: [],
     appUsers: [],
     rolls: [],
+    bulletinNotes: [],
     settings: {},
   })
   const [loading, setLoading] = useState(true)
@@ -84,6 +86,7 @@ export function DataProvider({ children }) {
         marketGoods,
         appUsers,
         rolls,
+        bulletinNotes,
         settingsRows,
       ] = await Promise.all([
         fetchAll('ship').then((r) => r[0] ?? null),
@@ -104,11 +107,13 @@ export function DataProvider({ children }) {
         fetchAll('app_users', 'created_at').catch(() => []),
         // roll_log needs migration 0002_roll_log.sql; degrade gracefully if absent.
         fetchAll('roll_log', 'created_at').catch(() => []),
+        // bulletin_notes needs migration 0003_bulletin_board.sql; degrade gracefully.
+        fetchAll('bulletin_notes').catch(() => []),
         fetchAll('settings', 'key'),
       ])
       const settings = {}
       for (const row of settingsRows) settings[row.key] = row.value
-      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, appUsers, rolls, settings })
+      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, appUsers, rolls, bulletinNotes, settings })
       setError(null)
     } catch (e) {
       console.error(e)
