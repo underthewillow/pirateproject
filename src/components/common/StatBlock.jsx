@@ -124,7 +124,7 @@ export default function StatBlock({ member, ownCharEditable = false, deepEditabl
             type="button"
             className={`btn small ${selfEditMode ? 'brass' : 'ghost'}`}
             onClick={onToggleSelfEdit}
-            title="Ability scores, max HP, condition, and bio sit behind this on purpose — HP and rolling always just work"
+            title="Ability scores and max HP sit behind this on purpose — HP, rolling, and your title/bio/condition always just work"
           >
             {selfEditMode ? 'Done' : 'Edit'}
           </button>
