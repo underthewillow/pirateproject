@@ -247,9 +247,11 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   font-family: var(--font-sc, var(--font-ui)); font-size: 11px; font-weight: 700;
   letter-spacing: 0.04em; color: var(--wax-red); margin-bottom: 8px;
 }
-/* author-only edit controls (image URL, visibility) */
+/* author-only edit controls (image upload, visibility) */
 .note-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.note-imgurl { font-size: 12px; color: var(--ink-faded); word-break: break-all; }
+.note-imgbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.note-upload { display: inline-flex; align-items: center; cursor: pointer; }
+.note-upload.disabled { opacity: 0.6; pointer-events: none; }
 .note-target { font-size: 12px; padding: 3px 6px; }
 
 .scratchpad { margin-top: 10px; }
