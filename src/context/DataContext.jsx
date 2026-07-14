@@ -26,6 +26,7 @@ const COLLECTIONS = {
   merchants: 'merchants',
   marketGoods: 'market_goods',
   appUsers: 'app_users',
+  rolls: 'roll_log',
 }
 const SINGLETONS = { ship: 'ship', funds: 'funds' }
 const ALL_TABLES = [
@@ -54,6 +55,7 @@ export function DataProvider({ children }) {
     merchants: [],
     marketGoods: [],
     appUsers: [],
+    rolls: [],
     settings: {},
   })
   const [loading, setLoading] = useState(true)
@@ -81,6 +83,7 @@ export function DataProvider({ children }) {
         merchants,
         marketGoods,
         appUsers,
+        rolls,
         settingsRows,
       ] = await Promise.all([
         fetchAll('ship').then((r) => r[0] ?? null),
@@ -99,11 +102,13 @@ export function DataProvider({ children }) {
         fetchAll('market_goods').catch(() => []),
         // app_users needs its own one-time SQL migration too (supabase/schema/app_users.sql).
         fetchAll('app_users', 'created_at').catch(() => []),
+        // roll_log needs migration 0002_roll_log.sql; degrade gracefully if absent.
+        fetchAll('roll_log', 'created_at').catch(() => []),
         fetchAll('settings', 'key'),
       ])
       const settings = {}
       for (const row of settingsRows) settings[row.key] = row.value
-      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, appUsers, settings })
+      setData({ ship, funds, roles, crew, inventory, ledger, locations, quests, journal, ports, merchants, marketGoods, appUsers, rolls, settings })
       setError(null)
     } catch (e) {
       console.error(e)
@@ -163,7 +168,7 @@ export function DataProvider({ children }) {
   }
 
   function sortList(key, list) {
-    if (key === 'ledger' || key === 'locations' || key === 'appUsers') {
+    if (key === 'ledger' || key === 'locations' || key === 'appUsers' || key === 'rolls') {
       return [...list].sort((a, b) => (a.created_at > b.created_at ? 1 : -1))
     }
     return [...list].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
