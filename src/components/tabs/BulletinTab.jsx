@@ -41,14 +41,15 @@ export default function BulletinTab() {
   const playersByChar = {}
   for (const u of appUsers) for (const cid of u.linked_crew_ids || []) (playersByChar[cid] ||= []).push(u.display_name || u.id)
 
-  // The character(s) the logged-in user plays — they read those characters'
-  // sealed orders (read-only).
-  const myChars = crew.filter((c) => identity?.linkedCrewIds?.includes(c.id))
+  // Sealed orders are a Party-only feature: they exist for player characters
+  // (is_pc), never NPCs.
+  // The player-character(s) the logged-in user plays read their own orders.
+  const myChars = crew.filter((c) => c.is_pc && identity?.linkedCrewIds?.includes(c.id))
   const myOrders = myChars.filter((c) => c.dm_note && c.dm_note.trim())
 
-  // DM writes to any character that's linked to a player.
+  // DM writes to any player character.
   const dispatchChars = isDM
-    ? crew.filter((c) => (playersByChar[c.id] || []).length > 0).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    ? crew.filter((c) => c.is_pc).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     : []
 
   return (
@@ -128,8 +129,7 @@ export default function BulletinTab() {
           </p>
           {dispatchChars.length === 0 ? (
             <p className="muted">
-              No characters are linked to a player yet. Assign characters to users in Settings › User Management,
-              then you can send them sealed orders here.
+              No player characters yet. Mark a crew member as a Player (on their character card) to send them sealed orders.
             </p>
           ) : (
             <div className="dispatch-list">
@@ -137,7 +137,9 @@ export default function BulletinTab() {
                 <div className="card dispatch" key={c.id}>
                   <div className="dispatch-head">
                     <span className="dispatch-name">{c.name}</span>
-                    <span className="dispatch-roles">played by {playersByChar[c.id].join(', ')}</span>
+                    <span className="dispatch-roles">
+                      {playersByChar[c.id]?.length ? `played by ${playersByChar[c.id].join(', ')}` : 'no player linked yet'}
+                    </span>
                   </div>
                   <Editable as="div" className="sealed-body" multiline
                     editable
