@@ -228,11 +228,21 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   background-size: 90px 90px, 120px 120px, 70px 70px, 100px 100px;
   box-shadow: inset 0 0 40px rgba(0,0,0,0.35);
 }
-.note { padding: 16px 16px 12px; display: flex; flex-direction: column; }
+/* Masonry: notes flow into responsive columns and size to their own content
+   (a short note stays short; one with a big image grows) instead of being
+   stretched to a uniform grid cell. */
+.cork-grid { columns: 240px; column-gap: 22px; }
+.cork-grid > .muted { column-span: all; }
+.note {
+  padding: 16px 16px 12px;
+  display: flex; flex-direction: column;
+  break-inside: avoid; -webkit-column-break-inside: avoid;
+  margin-bottom: 22px; width: 100%;
+}
 .note-body { white-space: pre-wrap; line-height: 1.55; min-height: 32px; flex: 1; }
 .note-img {
-  display: block; width: 100%; max-height: 240px; object-fit: cover;
-  border-radius: 3px; margin-bottom: 10px; cursor: zoom-in;
+  display: block; width: 100%; height: auto; cursor: zoom-in;
+  border-radius: 3px; margin-bottom: 10px;
   border: 1px solid var(--parchment-edge); box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 .note-foot {

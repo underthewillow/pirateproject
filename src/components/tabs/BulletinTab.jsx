@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useData } from '../../context/DataContext'
 import { useAppAuth } from '../../context/AuthContext'
 import { assetUrl } from '../../lib/asset'
+import { uploadImage } from '../../lib/upload'
 import Editable from '../common/Editable'
 import ImageInput from '../common/ImageInput'
 import Lightbox from '../common/Lightbox'
@@ -26,6 +27,7 @@ export default function BulletinTab() {
   const { bulletinNotes, appUsers, crew, addItem, patchItem, removeItem, canEdit, isDM } = useData()
   const { identity, hasRole } = useAppAuth()
   const [lightbox, setLightbox] = useState(null)
+  const [pasteBusy, setPasteBusy] = useState(false)
 
   // Any crew member can post/edit their own; the DM can manage anyone's.
   const canContribute = canEdit || hasRole('crew_member')
@@ -51,19 +53,55 @@ export default function BulletinTab() {
 
   const saveScratch = (v) => { if (identity?.id) patchItem('appUsers', identity.id, { scratch_pad: v }) }
 
+  // Paste an image (⌘/Ctrl+V) anywhere on the tab to share it as a new post —
+  // handy for screenshots or images copied off the web, no file to save first.
+  // Only reacts to image clipboard data, so pasting text into a note is normal.
+  useEffect(() => {
+    if (!canContribute) return
+    const onPaste = async (e) => {
+      const item = [...(e.clipboardData?.items || [])].find((it) => it.type?.startsWith('image/'))
+      if (!item) return
+      const file = item.getAsFile()
+      if (!file) return
+      e.preventDefault()
+      setPasteBusy(true)
+      try {
+        const url = await uploadImage(file, 'scuttlebutt')
+        await addItem('bulletinNotes', {
+          body: '', image_url: url, target_crew_id: null,
+          author: identity?.displayName || 'A hand', user_id: identity?.id ?? null,
+          sort_order: (bulletinNotes.length || 0) + 1,
+        })
+      } catch (err) {
+        console.error('pasted image upload failed', err)
+      } finally {
+        setPasteBusy(false)
+      }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [canContribute, addItem, identity, bulletinNotes.length])
+
   return (
     <div>
       {/* ---- Shared board ---- */}
       <div className="row-between" style={{ alignItems: 'flex-start' }}>
         <div>
           <h2 className="section-title" style={{ marginBottom: 2 }}>Scuttlebutt</h2>
-          <p className="map-tagline">Notes, announcements, and shared sightings — post to the whole crew, or (DM) to one hand alone.</p>
+          <p className="map-tagline">
+            Notes, announcements, and shared sightings — post to the whole crew, or (DM) to one hand alone.
+            {canContribute && ' Paste an image (⌘/Ctrl+V) to share it.'}
+          </p>
         </div>
-        {canContribute && <button className="btn small brass" onClick={addNote}>+ Post</button>}
+        {canContribute && (
+          <button className="btn small brass" onClick={addNote} disabled={pasteBusy}>
+            {pasteBusy ? 'Posting image…' : '+ Post'}
+          </button>
+        )}
       </div>
 
       <div className="corkboard">
-        <div className="panel-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 22 }}>
+        <div className="cork-grid">
           {visibleNotes.length === 0 && (
             <p className="muted">Nothing posted yet. {canContribute ? 'Pin the first note.' : ''}</p>
           )}
