@@ -14,6 +14,8 @@ export default function Editable({
   type = 'text',
   editable, // optional override — defaults to the app-wide canEdit flag, but
   // callers can extend editing to e.g. a crew member's own linked character.
+  enterNewline = false, // multiline only: Enter inserts a newline (commit on
+  // blur) instead of committing. For free-form text like the scratch pad.
 }) {
   const { canEdit: appCanEdit } = useData()
   const canEdit = editable ?? appCanEdit
@@ -58,7 +60,7 @@ export default function Editable({
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+          if (!enterNewline && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
           if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false) }
         }}
       />
