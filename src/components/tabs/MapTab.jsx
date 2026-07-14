@@ -70,7 +70,7 @@ function ShapeEl({ s, fill }) {
 }
 
 export default function MapTab() {
-  const { locations, settings, addItem, patchItem, removeItem, setSetting, canEdit } = useData()
+  const { locations, settings, ship: vessel, addItem, patchItem, removeItem, setSetting, canEdit, isDM } = useData()
   const [chartKey, setChartKey] = useState('sea_of_swords')
   const [view, setView] = useState({ s: 1, tx: 0, ty: 0 })
   const [openId, setOpenId] = useState(null)
@@ -79,6 +79,7 @@ export default function MapTab() {
   const [erasing, setErasing] = useState(false)   // DM fog-eraser mode
   const [brush, setBrush] = useState(90)           // eraser radius in map units
   const [liveStroke, setLiveStroke] = useState(null) // in-progress eraser stroke
+  const [localShip, setLocalShip] = useState(null)  // {x,y,heading} while dragging/rotating the ship
 
   const svgRef = useRef(null)
   const viewRef = useRef(view)
@@ -88,6 +89,7 @@ export default function MapTab() {
   const tapRef = useRef(null)
   const markerDrag = useRef(null)
   const strokeRef = useRef(null) // points of the eraser stroke currently being drawn
+  const shipDrag = useRef(null)  // {mode:'move'|'rotate', moved} while interacting with the ship
 
   const chart = CHARTS.find((c) => c.key === chartKey) || CHARTS[0]
   const W = chart.w || 1448
@@ -98,9 +100,13 @@ export default function MapTab() {
   // Free-hand fog reveals painted with the eraser. Each stroke: {chart, r, pts:[[x,y],…]}.
   const fogReveals = Array.isArray(settings?.fog_reveals) ? settings.fog_reveals : []
   const chartReveals = fogReveals.filter((s) => (s.chart || 'sea_of_swords') === chartKey)
+  // Movable/rotatable ship marker. Stored as {chart,x,y,heading} in settings.ship_marker.
+  const shipRaw = settings?.ship_marker && typeof settings.ship_marker === 'object' ? settings.ship_marker : null
+  const shipOnChart = !!shipRaw && (shipRaw.chart || 'sea_of_swords') === chartKey
+  const ship = shipOnChart ? { ...shipRaw, ...(localShip || {}) } : null
 
   // reset the view whenever we switch charts
-  useEffect(() => { setView({ s: 1, tx: 0, ty: 0 }); setPlacing(false); setErasing(false); setLiveStroke(null) }, [chartKey])
+  useEffect(() => { setView({ s: 1, tx: 0, ty: 0 }); setPlacing(false); setErasing(false); setLiveStroke(null); setLocalShip(null) }, [chartKey])
 
   const clampView = useCallback((v) => {
     const s = clamp(v.s, 1, 6)
@@ -145,7 +151,7 @@ export default function MapTab() {
 
   // ---- background pan / pinch ----
   const onBgDown = (e) => {
-    if (erasing && canEdit) {
+    if (erasing && isDM) {
       svgRef.current?.setPointerCapture?.(e.pointerId)
       const w = worldFromClient(e.clientX, e.clientY)
       strokeRef.current = [[Math.round(clamp(w.x, 0, W)), Math.round(clamp(w.y, 0, H))]]
@@ -158,7 +164,7 @@ export default function MapTab() {
     pinchRef.current = null
   }
   const onBgMove = (e) => {
-    if (erasing && canEdit) {
+    if (erasing && isDM) {
       if (!strokeRef.current) return
       const w = worldFromClient(e.clientX, e.clientY)
       const pts = strokeRef.current
@@ -186,7 +192,7 @@ export default function MapTab() {
     }
   }
   const onBgUp = (e) => {
-    if (erasing && canEdit) {
+    if (erasing && isDM) {
       svgRef.current?.releasePointerCapture?.(e.pointerId)
       const pts = strokeRef.current
       strokeRef.current = null
@@ -265,12 +271,46 @@ export default function MapTab() {
   }
   const clearErase = () => setSetting('fog_reveals', fogReveals.filter((s) => (s.chart || 'sea_of_swords') !== chartKey))
 
+  // ---- ship marker: drop, drag to move, drag the handle to set heading ----
+  const placeShip = () => setSetting('ship_marker', { chart: chartKey, x: Math.round(W / 2), y: Math.round(H / 2), heading: shipRaw?.heading ?? 0 })
+  const removeShip = () => { setLocalShip(null); setSetting('ship_marker', null) }
+  const onShipDown = (e, mode) => {
+    if (!shipEditable) return
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    shipDrag.current = { mode, moved: false }
+  }
+  const onShipMove = (e) => {
+    const d = shipDrag.current
+    if (!d) return
+    e.stopPropagation()
+    d.moved = true
+    const w = worldFromClient(e.clientX, e.clientY)
+    if (d.mode === 'move') {
+      setLocalShip({ x: clamp(w.x, 0, W), y: clamp(w.y, 0, H), heading: shipRaw?.heading ?? 0 })
+    } else {
+      const heading = (Math.atan2(w.x - shipRaw.x, -(w.y - shipRaw.y)) * 180 / Math.PI + 360) % 360
+      setLocalShip({ x: shipRaw.x, y: shipRaw.y, heading })
+    }
+  }
+  const onShipUp = (e) => {
+    const d = shipDrag.current
+    if (!d) return
+    e.stopPropagation()
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    shipDrag.current = null
+    const ls = localShip
+    setLocalShip(null)
+    if (ls && d.moved) setSetting('ship_marker', { chart: chartKey, x: Math.round(ls.x), y: Math.round(ls.y), heading: Math.round(ls.heading) })
+  }
+
   // markers for this chart; players see charted ones, editors see all
   const mine = locations.filter((l) => (l.chart || 'sea_of_swords') === chartKey)
   const visible = mine.filter((l) => canEdit || isCharted(l.region))
   const chartedRegions = regions.filter((r) => charted.includes(r.key))
   const openLoc = locations.find((l) => l.id === openId)
   const inv = 1 / view.s
+  const shipEditable = isDM && !erasing && !placing // ship is a DM-only tool, draggable in plain edit mode
 
   return (
     <div>
@@ -404,6 +444,52 @@ export default function MapTab() {
                   </g>
                 )
               })}
+
+              {/* ship marker — everyone sees it; editors drag to move and turn the
+                  brass handle to set heading. Bow points the way it's travelling. */}
+              {ship && (
+                <g transform={`translate(${ship.x},${ship.y}) scale(${inv})`}>
+                  {shipEditable && (
+                    <g style={{ cursor: 'crosshair' }}
+                      onPointerDown={(e) => onShipDown(e, 'rotate')}
+                      onPointerMove={onShipMove}
+                      onPointerUp={onShipUp}
+                      onPointerCancel={onShipUp}>
+                      <line x1="0" y1="0"
+                        x2={Math.sin((ship.heading * Math.PI) / 180) * 56}
+                        y2={-Math.cos((ship.heading * Math.PI) / 180) * 56}
+                        stroke="#b08d3f" strokeWidth="2" strokeDasharray="4 3" opacity="0.9" />
+                      <circle
+                        cx={Math.sin((ship.heading * Math.PI) / 180) * 56}
+                        cy={-Math.cos((ship.heading * Math.PI) / 180) * 56}
+                        r="9" fill="#b08d3f" stroke="#2a1a0c" strokeWidth="2" pointerEvents="all" />
+                      <text
+                        x={Math.sin((ship.heading * Math.PI) / 180) * 56}
+                        y={-Math.cos((ship.heading * Math.PI) / 180) * 56 + 4}
+                        textAnchor="middle" style={{ font: '11px serif', fill: '#2a1a0c' }} pointerEvents="none">↻</text>
+                    </g>
+                  )}
+                  <g transform={`rotate(${ship.heading})`}
+                    style={{ cursor: shipEditable ? 'grab' : 'default' }}
+                    onPointerDown={(e) => onShipDown(e, 'move')}
+                    onPointerMove={onShipMove}
+                    onPointerUp={onShipUp}
+                    onPointerCancel={onShipUp}>
+                    <circle r="30" fill="#000" opacity="0" pointerEvents={shipEditable ? 'all' : 'none'} />
+                    <path d="M0,-30 C8,-20 13,-4 12,8 L9,20 Q0,27 -9,20 L-12,8 C-13,-4 -8,-20 0,-30 Z"
+                      fill="#f4e6c4" stroke="#2a1a0c" strokeWidth="2.5" strokeLinejoin="round" />
+                    <line x1="0" y1="-18" x2="0" y2="16" stroke="#7a5a2a" strokeWidth="2" />
+                    <path d="M0,-16 L8,2 L0,2 Z" fill="#e9d7ad" stroke="#7a5a2a" strokeWidth="1.5" strokeLinejoin="round" />
+                    <circle cx="0" cy="-26" r="2.6" fill="#8a2f2b" />
+                  </g>
+                  <g transform="translate(0,42)">
+                    <text x="0" y="0" textAnchor="middle"
+                      style={{ font: '700 15px var(--font-ui, sans-serif)', paintOrder: 'stroke', stroke: '#f7ecd2', strokeWidth: 5, strokeLinejoin: 'round', fill: '#2a1a0c' }}>
+                      {vessel?.name || 'Our Ship'}
+                    </text>
+                  </g>
+                </g>
+              )}
             </g>
           </svg>
 
@@ -413,12 +499,18 @@ export default function MapTab() {
             <button className="map-btn" title="Zoom out" onClick={() => zoomCenter(1 / 1.35)}>－</button>
             <button className="map-btn" title="Reset view" onClick={() => setView({ s: 1, tx: 0, ty: 0 })}>⤢</button>
             {canEdit && (
+              <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => { setErasing(false); setPlacing((p) => !p) }}>
+                {placing ? '✕ cancel' : '＋ marker'}
+              </button>
+            )}
+            {isDM && (
               <>
-                <button className={`map-btn wide ${placing ? 'active' : ''}`} onClick={() => { setErasing(false); setPlacing((p) => !p) }}>
-                  {placing ? '✕ cancel' : '＋ marker'}
-                </button>
                 <button className={`map-btn wide ${erasing ? 'active' : ''}`} onClick={() => { setPlacing(false); setErasing((p) => !p) }}>
                   {erasing ? '✕ done erasing' : '⌫ fog eraser'}
+                </button>
+                <button className={`map-btn wide ${ship ? 'active' : ''}`}
+                  onClick={() => { setPlacing(false); setErasing(false); ship ? removeShip() : placeShip() }}>
+                  {ship ? '⚓ remove ship' : '⚓ place ship'}
                 </button>
               </>
             )}
