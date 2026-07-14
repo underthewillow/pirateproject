@@ -1,13 +1,19 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
 import { playDice, isMuted, setMuted } from '../lib/sound'
+import { useData } from './DataContext'
+import { useAppAuth } from './AuthContext'
 
 const RollCtx = createContext(null)
 export const useRoller = () => useContext(RollCtx)
 
 // Global roll toaster: any roll anywhere in the app funnels through show(),
 // which plays the dice sound and pops an animated overlay so nobody has to
-// scroll to see the result.
+// scroll to see the result. Because every roll passes through here, this is
+// also the single place we append to the shared roll log (see the Roll Log
+// tab / issue #23).
 export function RollProvider({ children }) {
+  const { addItem } = useData()
+  const auth = useAppAuth()
   const [roll, setRoll] = useState(null)
   const [muted, setMutedState] = useState(isMuted())
   const timer = useRef(null)
@@ -18,7 +24,21 @@ export function RollProvider({ children }) {
     playDice()
     clearTimeout(timer.current)
     timer.current = setTimeout(() => setRoll(null), 3400)
-  }, [])
+    // Persist to the shared roll log — fire-and-forget so a slow/failed write
+    // never holds up the overlay. Records who rolled + enough to highlight
+    // natural 20s and 1s later.
+    const who = auth?.identity
+    addItem?.('rolls', {
+      roller: who?.displayName || 'Unknown hand',
+      user_id: who?.id ?? null,
+      label: entry.label || 'Roll',
+      total: entry.total ?? null,
+      detail: entry.detail ?? null,
+      face: entry.face ?? null,
+      crit: !!entry.crit,
+      fumble: !!entry.fumble,
+    }).catch((e) => console.error('roll log write failed', e))
+  }, [addItem, auth])
 
   const toggleMute = () => { const v = !muted; setMuted(v); setMutedState(v) }
 
