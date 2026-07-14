@@ -36,6 +36,9 @@
   letter-spacing: 0.4px; padding: 1px 8px; border-radius: 9px; border: 1px solid;
 }
 .npc-rank.big { font-size: 13px; padding: 3px 12px; border-radius: 12px; margin-top: 0; }
+.rank-hostile { background: rgba(116,36,32,0.18); border-color: var(--wax-red); color: var(--wax-red); }
+.rank-neutral { background: rgba(90,90,90,0.16); border-color: #808080; color: #5a5a5a; }
+.rank-friendly { background: rgba(46,122,58,0.18); border-color: #2e7a3a; color: #2e7a3a; }
 .rank-passenger { background: rgba(90,110,130,0.18); border-color: #5a7382; color: #37505e; }
 .rank-recruit { background: rgba(176,141,63,0.20); border-color: var(--brass); color: #6a5220; }
 .rank-crew { background: linear-gradient(160deg, var(--leather-light), var(--leather-dark)); border-color: var(--leather-darker); color: var(--brass-light); }
@@ -70,9 +73,40 @@
 .hide-mask { margin-right: 3px; font-size: 12px; }
 
 /* ---- Crew board: compact character cards (the Helm's look, a size down) ---- */
-.crew-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+.crew-cards { display: flex; flex-wrap: wrap; gap: 10px; align-items: start; }
+.crew-card-wrap { position: relative; width: 118px; }
+.role-appoint { width: 100%; }
+
+/* compact station badge in each card's bottom-right corner (reflects current
+   station). Lives in the wrapper, not the card, so the card's overflow:hidden
+   doesn't clip it. */
+.crew-move-btn {
+  position: absolute; right: 6px; bottom: 6px; z-index: 3;
+  padding: 1px 3px; border: none; border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; cursor: pointer;
+  background: rgba(247,236,210,0.85);
+}
+.crew-move-btn:hover { background: #fff; }
+.crew-move-menu {
+  position: absolute; top: calc(100% + 2px); right: 0; left: auto;
+  z-index: 30; min-width: 160px;
+  background: linear-gradient(180deg, var(--parchment-light), var(--parchment));
+  border: 1px solid var(--parchment-edge); border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.4); padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.crew-move-opt {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 8px; border-radius: 6px; border: none; background: none;
+  cursor: pointer; font-size: 13px; color: var(--ink); white-space: nowrap;
+}
+.crew-move-opt:hover { background: rgba(176,141,63,0.22); }
+.crew-move-opt.current { font-weight: 700; background: rgba(176,141,63,0.3); }
+.crew-move-opt-icon { width: 18px; text-align: center; }
+.crew-move-backdrop { position: fixed; inset: 0; z-index: 25; }
 .crew-card {
-  width: 118px; display: flex; flex-direction: column; text-align: left; cursor: grab; overflow: hidden;
+  width: 118px; display: flex; flex-direction: column; text-align: left; cursor: pointer; overflow: hidden;
   border-radius: 9px; background: rgba(255,250,235,0.5);
   border: 1px solid var(--parchment-edge); box-shadow: 0 2px 6px rgba(60,36,12,0.25);
   transition: transform 0.12s ease, box-shadow 0.12s ease;

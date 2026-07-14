@@ -5,7 +5,7 @@ const hpColor = (pct) => (pct > 0.5 ? '#3a7a4a' : pct > 0.25 ? '#c08a2c' : '#a33
 const num = (v) => Number(v) || 0
 
 // A compact character card for the Crew board — the Helm's stat-card look, a
-// size down, and draggable between stations. Serves both players and NPCs:
+// size down; the parent tab pairs it with a station dropdown. Serves both players and NPCs:
 // players show their class, NPCs show their crew standing. Reuses the Helm's
 // npc-mini-* badge/HP styles so the two boards read as one system.
 export default function CrewCard({ member, onOpen }) {
