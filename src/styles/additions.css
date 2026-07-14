@@ -234,11 +234,15 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .cork-grid { columns: 240px; column-gap: 22px; }
 .cork-grid > .muted { column-span: all; }
 .note {
-  padding: 16px 16px 12px;
+  padding: 26px 16px 12px; /* top room so the pin sits on the paper, not above it */
   display: flex; flex-direction: column;
   break-inside: avoid; -webkit-column-break-inside: avoid;
   margin-bottom: 22px; width: 100%;
 }
+/* Seat the pin fully on the paper (a negative top overflows the card, and CSS
+   multicol clips that overflow into the previous column) and lift it above the
+   parchment vignette (::after) so its lower half isn't darkened. */
+.note .pin-tack { top: 9px; z-index: 2; }
 .note-body { white-space: pre-wrap; line-height: 1.55; min-height: 32px; flex: 1; }
 .note-img {
   display: block; width: 100%; height: auto; cursor: zoom-in;
