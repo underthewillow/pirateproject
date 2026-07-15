@@ -23,7 +23,10 @@ function formatDate(ts) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-const PER_PAGE = 6 // scrapbook leaves hold up to this many posts before turning
+// Posts per scrapbook leaf before it turns — fewer on phones so a leaf isn't a
+// giant single-column scroll (and the page-turn shows up with fewer posts).
+const PER_PAGE_DESKTOP = 6
+const PER_PAGE_MOBILE = 3
 
 export default function BulletinTab() {
   const { bulletinNotes, appUsers, crew, addItem, patchItem, removeItem, canEdit, isDM } = useData()
@@ -32,12 +35,22 @@ export default function BulletinTab() {
   const [pasteBusy, setPasteBusy] = useState(false)
   const [editingId, setEditingId] = useState(null) // note whose edit controls are shown
   const [page, setPage] = useState(0) // current scrapbook leaf
+  const [perPage, setPerPage] = useState(PER_PAGE_DESKTOP)
+
+  // Fewer posts per leaf on narrow screens (matches the 640px CSS breakpoint).
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const apply = () => setPerPage(mq.matches ? PER_PAGE_MOBILE : PER_PAGE_DESKTOP)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
 
   // Any crew member can post/edit their own; the DM can manage anyone's.
   const canContribute = canEdit || hasRole('crew_member')
   const me = appUsers.find((u) => u.id === identity?.id)
   const canManage = (n) => canEdit || (!!identity?.id && n.user_id === identity.id)
-  const canReorder = canEdit // curating the shared scrapbook order is a DM/admin action
+  const canReorder = canContribute // anyone who can post can arrange the scrapbook
 
   const pcs = crew.filter((c) => c.is_pc) // private posts target a player character
   const crewById = Object.fromEntries(crew.map((c) => [c.id, c]))
@@ -47,12 +60,12 @@ export default function BulletinTab() {
   const visibleNotes = bulletinNotes.filter((n) => !n.target_crew_id || isDM || myCharIds.has(n.target_crew_id))
 
   // Paginate the visible posts into scrapbook leaves.
-  const pageCount = Math.max(1, Math.ceil(visibleNotes.length / PER_PAGE))
+  const pageCount = Math.max(1, Math.ceil(visibleNotes.length / perPage))
   const safePage = Math.min(page, pageCount - 1)
-  const pageNotes = visibleNotes.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE)
+  const pageNotes = visibleNotes.slice(safePage * perPage, safePage * perPage + perPage)
 
   const addNote = async () => {
-    setPage(Math.floor(visibleNotes.length / PER_PAGE)) // land on the new post's leaf
+    setPage(Math.floor(visibleNotes.length / perPage)) // land on the new post's leaf
     const row = await addItem('bulletinNotes', {
       body: '',
       image_url: null,
@@ -64,19 +77,21 @@ export default function BulletinTab() {
     if (row?.id) setEditingId(row.id) // open a fresh post ready to edit
   }
 
-  // Move a post one slot earlier/later in the shared order (dir = -1 / +1),
-  // hopping across leaves so it can be placed anywhere. Reorder is DM-only and
-  // the DM sees every post, so we can operate on the full sorted board list.
-  // Reindex to sequential sort_order and persist only the slots that changed.
+  // Move a post one slot earlier/later (dir = -1 / +1), hopping across leaves so
+  // it can be placed anywhere. Operates on the *visible* order (what this viewer
+  // sees) and swaps the two posts' sort_order values — so it's correct even for
+  // a non-DM who can't see interleaved private posts, and never clobbers them.
   const reorder = (note, dir) => {
-    const all = bulletinNotes
-    const i = all.findIndex((x) => x.id === note.id)
+    const i = visibleNotes.findIndex((x) => x.id === note.id)
     const j = i + dir
-    if (i < 0 || j < 0 || j >= all.length) return
-    const next = [...all]
-    ;[next[i], next[j]] = [next[j], next[i]]
-    next.forEach((n, idx) => { if ((n.sort_order ?? 0) !== idx) patchItem('bulletinNotes', n.id, { sort_order: idx }) })
-    setPage(Math.floor(j / PER_PAGE)) // follow the post to its new leaf
+    if (i < 0 || j < 0 || j >= visibleNotes.length) return
+    const a = visibleNotes[i], b = visibleNotes[j]
+    const ao = a.sort_order ?? 0, bo = b.sort_order ?? 0
+    // Swap positions by swapping sort_order values. If they happen to tie, nudge
+    // so a lands on the correct side of b.
+    patchItem('bulletinNotes', a.id, { sort_order: ao === bo ? bo + dir : bo })
+    patchItem('bulletinNotes', b.id, { sort_order: ao })
+    setPage(Math.floor(j / perPage)) // follow the post to its new leaf
   }
 
   const saveScratch = (v) => { if (identity?.id) patchItem('appUsers', identity.id, { scratch_pad: v }) }
@@ -94,7 +109,7 @@ export default function BulletinTab() {
       e.preventDefault()
       setPasteBusy(true)
       try {
-        setPage(Math.floor(visibleNotes.length / PER_PAGE)) // land on the new post's leaf
+        setPage(Math.floor(visibleNotes.length / perPage)) // land on the new post's leaf
         const url = await uploadImage(file, 'scuttlebutt')
         await addItem('bulletinNotes', {
           body: '', image_url: url, target_crew_id: null,
@@ -109,7 +124,7 @@ export default function BulletinTab() {
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
-  }, [canContribute, addItem, identity, bulletinNotes.length])
+  }, [canContribute, addItem, identity, bulletinNotes.length, perPage])
 
   return (
     <div>
@@ -135,10 +150,10 @@ export default function BulletinTab() {
             {visibleNotes.length === 0 && (
               <p className="muted">The scrapbook is empty. {canContribute ? 'Paste in the first clipping.' : ''}</p>
             )}
-            {pageNotes.map((n) => {
+            {pageNotes.map((n, localIdx) => {
               const target = n.target_crew_id ? crewById[n.target_crew_id] : null
               const img = n.image_url ? assetUrl(n.image_url) : ''
-              const gi = bulletinNotes.findIndex((x) => x.id === n.id) // slot in the full order
+              const vi = safePage * perPage + localIdx // slot in the visible order
               return (
                 <div key={n.id} className={`parchment note ${n.target_crew_id ? 'note-private' : ''}`}
                   style={{ transform: `rotate(${((n.sort_order || 0) % 3) - 1}deg)` }}>
@@ -146,9 +161,9 @@ export default function BulletinTab() {
                   {canReorder && (
                     <div className="scrap-move">
                       <button className="scrap-move-btn" title="Move earlier"
-                        disabled={gi <= 0} onClick={() => reorder(n, -1)}>‹</button>
+                        disabled={vi <= 0} onClick={() => reorder(n, -1)}>‹</button>
                       <button className="scrap-move-btn" title="Move later"
-                        disabled={gi < 0 || gi >= bulletinNotes.length - 1} onClick={() => reorder(n, 1)}>›</button>
+                        disabled={vi >= visibleNotes.length - 1} onClick={() => reorder(n, 1)}>›</button>
                     </div>
                   )}
                   {n.target_crew_id && (
