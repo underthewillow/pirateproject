@@ -129,7 +129,7 @@
 .crew-card .npc-mini-name { font-size: 13.5px; }
 .crew-card .npc-rank { font-size: 9.5px; padding: 1px 6px; }
 .crew-card-class { font-size: 10.5px; margin-top: 2px; line-height: 1.15; }
-@media (max-width: 640px) { .crew-card { width: 104px; } }
+@media (max-width: 640px) { .crew-card, .crew-card-wrap { width: 104px; } }
 
 /* ---- Helm: make hero title + stat counters clickable links to their pages ---- */
 button.dash-hero-id {
@@ -248,25 +248,43 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .rolllog-row.fumble .rolllog-total { color: var(--wax-red); }
 
 /* ---- Scuttlebutt board (issues #31 / #22 / #21) ---- */
-.corkboard {
-  margin-top: 16px;
-  padding: 22px 18px;
-  border-radius: var(--radius);
-  border: 1px solid #6b4a2a;
-  background-color: #7d5836;
-  background-image:
-    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.05) 0 2px, transparent 3px),
-    radial-gradient(circle at 70% 60%, rgba(0,0,0,0.10) 0 2px, transparent 3px),
-    radial-gradient(circle at 45% 80%, rgba(255,255,255,0.04) 0 2px, transparent 3px),
-    radial-gradient(circle at 88% 22%, rgba(0,0,0,0.10) 0 2px, transparent 3px);
-  background-size: 90px 90px, 120px 120px, 70px 70px, 100px 100px;
-  box-shadow: inset 0 0 40px rgba(0,0,0,0.35);
+/* Scuttlebutt scrapbook: posts live on aged album leaves you turn one at a
+   time (single-page nav below). Each leaf is a paper spread with a stitched
+   binding down the left edge. */
+.scrapbook { margin-top: 16px; }
+.scrap-page {
+  position: relative;
+  min-height: 300px;
+  padding: 26px 24px 26px 30px;
+  border-radius: 8px;
+  border: 1px solid var(--parchment-edge);
+  background: linear-gradient(160deg, #e3d3a9, #d8c495 60%, #cdb885);
+  box-shadow: inset 0 0 44px rgba(90,60,25,0.35), 0 6px 16px rgba(0,0,0,0.35);
+  animation: hb-turn 0.35s ease; /* reuse the handbook's page-turn */
 }
-/* Masonry: notes flow into responsive columns and size to their own content
-   (a short note stays short; one with a big image grows) instead of being
-   stretched to a uniform grid cell. */
-.cork-grid { columns: 240px; column-gap: 22px; }
-.cork-grid > .muted { column-span: all; }
+/* stitched binding down the inner edge */
+.scrap-page::before {
+  content: ''; position: absolute; left: 11px; top: 16px; bottom: 16px; width: 2px;
+  background: repeating-linear-gradient(180deg, rgba(90,60,25,0.55) 0 8px, transparent 8px 16px);
+}
+/* Masonry: clippings flow into responsive columns and size to their own
+   content (a short note stays short; one with a big image grows). */
+.scrap-grid { columns: 240px; column-gap: 22px; }
+.scrap-grid > .muted { column-span: all; }
+
+/* reorder handles (DM/curator) — top-left, opposite the pin */
+.scrap-move { position: absolute; top: 7px; left: 7px; z-index: 3; display: flex; gap: 3px; }
+.scrap-move-btn {
+  width: 20px; height: 20px; padding: 0; border-radius: 5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; color: var(--ink);
+  border: 1px solid var(--parchment-edge); background: rgba(247,236,210,0.9);
+}
+.scrap-move-btn:hover:not(:disabled) { background: #fff; }
+.scrap-move-btn:disabled { opacity: 0.35; cursor: default; }
+
+.scrap-nav { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+.scrap-count { font-family: var(--font-sc, var(--font-ui)); letter-spacing: 1px; font-size: 12px; color: var(--ink-faded); text-transform: uppercase; }
 .note {
   padding: 26px 16px 12px; /* top room so the pin sits on the paper, not above it */
   display: flex; flex-direction: column;
