@@ -93,6 +93,25 @@ check in that feature's own component — no new plumbing.
 → `App`. Auth is nested inside `DataProvider` because it needs `settings`/`app_users` via
 `useData()`.
 
+**PWA.** `vite-plugin-pwa` (configured in `vite.config.js`) generates the manifest and a
+Workbox service worker; `devOptions.enabled` keeps it working in `npm run dev` too, so the
+tunnel can be used to test installing without a deploy. It precaches only the built shell
+(JS/CSS/HTML/fonts — the map and portrait images are deliberately excluded), declares no
+runtime caching rule, and Supabase is a different origin, so no data request is ever
+served from cache. `registerType: 'autoUpdate'` is the safety valve: a new build claims
+open clients immediately, which is what a first attempt at this lacked — it could strand a
+phone on a dead app shell with no recovery short of clearing site data.
+
+Icons live in `public/icons/` (plain + maskable, generated from `public/assets/pirate.png`);
+`apple-touch-icon` is linked in `index.html` because iOS won't read the manifest for it.
+Installed, the app draws under the status bar (`apple-mobile-web-app-status-bar-style:
+black-translucent`), so `.app` carries `env(safe-area-inset-*)` padding **in both the
+desktop rule and the ≤760px one** — dropping it from the phone breakpoint is what tucks
+the masthead under the notch. The bar's own colour comes from `body`'s `background-color`,
+not `theme-color`; see the comment on that declaration in `theme.css` before touching it.
+`src/hooks/useInstallPrompt.js` captures `beforeinstallprompt` for the drawer's "Install
+app" button (Chromium only; iOS is Share ▸ Add to Home Screen).
+
 ## D&D Beyond sync
 
 Crew character sheets can sync from a public D&D Beyond character. The browser can't
