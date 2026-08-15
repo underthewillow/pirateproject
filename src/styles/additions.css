@@ -150,7 +150,12 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   position: fixed; inset: 0;
   background: rgba(8,4,1,0.88);
   display: flex; align-items: center; justify-content: center;
-  z-index: 70; padding: 24px;
+  z-index: 70;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
 }
 .lightbox-img {
   max-width: 100%; max-height: 100%;
@@ -158,7 +163,11 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
   box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 .lightbox-close {
-  position: fixed; top: 14px; right: 18px;
+  /* Fixed to the very top of the screen — installed, that's exactly where the
+     dynamic island sits, which would leave no way to shut the lightbox. */
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top));
+  right: calc(18px + env(safe-area-inset-right));
   font-family: var(--font-display); font-size: 26px;
   background: none; border: none; color: var(--parchment-light); cursor: pointer;
   text-shadow: 0 1px 4px rgba(0,0,0,0.7);
@@ -182,7 +191,8 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 
 .rolllog-drawer-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px; border-bottom: 1px solid var(--parchment-edge);
+  padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+  border-bottom: 1px solid var(--parchment-edge);
   background: rgba(150,120,58,0.14);
 }
 .rolllog-drawer-title { font-family: var(--font-display); font-size: 20px; color: var(--ink); }
@@ -193,7 +203,8 @@ button.dash-hero-stat:hover { background: rgba(255,250,235,0.4); transform: tran
 .rolllog-drawer-close:hover { color: var(--ink); }
 .rolllog-drawer-body { flex: 1; overflow-y: auto; padding: 12px 12px 4px; }
 .rolllog-drawer-foot {
-  display: flex; gap: 8px; padding: 10px 12px;
+  display: flex; gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--parchment-edge);
 }
 
